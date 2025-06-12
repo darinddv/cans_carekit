@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Platform 
 } from 'react-native';
-import { Heart, Check, Clock, AlertCircle } from 'lucide-react-native';
+import { Heart, Check, Clock, CircleAlert as AlertCircle } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // TypeScript interface for care tasks
