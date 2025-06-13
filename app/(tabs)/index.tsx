@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -7,20 +7,15 @@ import {
   ScrollView, 
   TouchableOpacity, 
   ActivityIndicator,
-  Platform 
+  Platform,
+  RefreshControl
 } from 'react-native';
-import { Heart, Check, Clock, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// TypeScript interface for care tasks
-interface CareTask {
-  id: string;
-  title: string;
-  time: string;
-  completed: boolean;
-}
+import { SupabaseService, CareTask } from '@/lib/supabaseService';
 
 const STORAGE_KEY = '@care_tasks';
+const LAST_SYNC_KEY = '@last_sync';
 
 // Default tasks data
 const defaultTasks: CareTask[] = [
@@ -59,77 +54,254 @@ const defaultTasks: CareTask[] = [
 export default function CareCardScreen() {
   const [tasks, setTasks] = useState<CareTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
-  // Load tasks from AsyncStorage on component mount
+  // Load tasks and initialize sync on component mount
   useEffect(() => {
-    loadTasks();
+    initializeApp();
   }, []);
 
-  // Save tasks to AsyncStorage whenever tasks change
+  // Auto-sync every 30 seconds when online
   useEffect(() => {
-    if (!isLoading && tasks.length > 0) {
-      saveTasks();
-    }
-  }, [tasks, isLoading]);
+    if (!isOnline) return;
 
-  const loadTasks = async () => {
+    const syncInterval = setInterval(() => {
+      syncWithSupabase(false);
+    }, 30000);
+
+    return () => clearInterval(syncInterval);
+  }, [isOnline, tasks]);
+
+  const initializeApp = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      
-      // For web platform, use localStorage as fallback
-      if (Platform.OS === 'web') {
-        const storedTasks = localStorage.getItem(STORAGE_KEY);
-        if (storedTasks) {
-          setTasks(JSON.parse(storedTasks));
-        } else {
-          setTasks(defaultTasks);
-        }
-      } else {
-        const storedTasks = await AsyncStorage.getItem(STORAGE_KEY);
-        if (storedTasks) {
-          setTasks(JSON.parse(storedTasks));
-        } else {
-          setTasks(defaultTasks);
-        }
+
+      // Load tasks from local storage first
+      await loadLocalTasks();
+
+      // Check authentication and sync
+      const isAuthenticated = await SupabaseService.isAuthenticated();
+      if (!isAuthenticated) {
+        // Sign in anonymously for demo purposes
+        await SupabaseService.signInAnonymously();
       }
+
+      // Initial sync with Supabase
+      await syncWithSupabase(true);
+      
+      // Load last sync time
+      await loadLastSyncTime();
     } catch (err) {
-      setError('Failed to load tasks. Please try again.');
-      setTasks(defaultTasks);
+      console.error('Error initializing app:', err);
+      setError('Failed to initialize app. Using offline mode.');
+      setIsOnline(false);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const saveTasks = async () => {
+  const loadLocalTasks = async () => {
     try {
-      const tasksJson = JSON.stringify(tasks);
+      let storedTasks: CareTask[] = [];
       
-      // For web platform, use localStorage as fallback
+      if (Platform.OS === 'web') {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        storedTasks = stored ? JSON.parse(stored) : defaultTasks;
+      } else {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        storedTasks = stored ? JSON.parse(stored) : defaultTasks;
+      }
+
+      setTasks(storedTasks);
+    } catch (err) {
+      console.error('Error loading local tasks:', err);
+      setTasks(defaultTasks);
+    }
+  };
+
+  const saveLocalTasks = async (tasksToSave: CareTask[]) => {
+    try {
+      const tasksJson = JSON.stringify(tasksToSave);
+      
       if (Platform.OS === 'web') {
         localStorage.setItem(STORAGE_KEY, tasksJson);
       } else {
         await AsyncStorage.setItem(STORAGE_KEY, tasksJson);
       }
     } catch (err) {
-      setError('Failed to save tasks. Changes may not persist.');
+      console.error('Error saving local tasks:', err);
+      setError('Failed to save tasks locally.');
     }
   };
 
-  const toggleTaskCompletion = (taskId: string) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId
-          ? { ...task, completed: !task.completed }
-          : task
-      )
+  const loadLastSyncTime = async () => {
+    try {
+      let lastSync: string | null = null;
+      
+      if (Platform.OS === 'web') {
+        lastSync = localStorage.getItem(LAST_SYNC_KEY);
+      } else {
+        lastSync = await AsyncStorage.getItem(LAST_SYNC_KEY);
+      }
+
+      if (lastSync) {
+        setLastSyncTime(new Date(lastSync));
+      }
+    } catch (err) {
+      console.error('Error loading last sync time:', err);
+    }
+  };
+
+  const saveLastSyncTime = async () => {
+    try {
+      const now = new Date().toISOString();
+      
+      if (Platform.OS === 'web') {
+        localStorage.setItem(LAST_SYNC_KEY, now);
+      } else {
+        await AsyncStorage.setItem(LAST_SYNC_KEY, now);
+      }
+
+      setLastSyncTime(new Date(now));
+    } catch (err) {
+      console.error('Error saving last sync time:', err);
+    }
+  };
+
+  const syncWithSupabase = async (isInitialSync: boolean = false) => {
+    try {
+      if (!isInitialSync) {
+        setIsSyncing(true);
+      }
+
+      // Check if user is authenticated
+      const isAuthenticated = await SupabaseService.isAuthenticated();
+      if (!isAuthenticated) {
+        setIsOnline(false);
+        return;
+      }
+
+      // Fetch tasks from Supabase
+      const supabaseTasks = await SupabaseService.fetchTasks();
+      
+      if (isInitialSync && supabaseTasks.length > 0) {
+        // If this is initial sync and Supabase has data, use it
+        setTasks(supabaseTasks);
+        await saveLocalTasks(supabaseTasks);
+      } else if (isInitialSync && supabaseTasks.length === 0 && tasks.length > 0) {
+        // If Supabase is empty but we have local data, sync local to Supabase
+        await SupabaseService.syncTasks(tasks);
+      } else if (!isInitialSync) {
+        // For regular syncs, merge changes intelligently
+        const mergedTasks = mergeTasks(tasks, supabaseTasks);
+        if (JSON.stringify(mergedTasks) !== JSON.stringify(tasks)) {
+          setTasks(mergedTasks);
+          await saveLocalTasks(mergedTasks);
+        }
+      }
+
+      setIsOnline(true);
+      setError(null);
+      await saveLastSyncTime();
+    } catch (err) {
+      console.error('Error syncing with Supabase:', err);
+      setIsOnline(false);
+      if (isInitialSync) {
+        setError('Unable to sync with cloud. Working offline.');
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const mergeTasks = (localTasks: CareTask[], remoteTasks: CareTask[]): CareTask[] => {
+    const taskMap = new Map<string, CareTask>();
+    
+    // Add all local tasks
+    localTasks.forEach(task => {
+      taskMap.set(task.id, task);
+    });
+    
+    // Merge with remote tasks (remote takes precedence if updated_at is newer)
+    remoteTasks.forEach(remoteTask => {
+      const localTask = taskMap.get(remoteTask.id);
+      if (!localTask || 
+          (remoteTask.updated_at && localTask.updated_at && 
+           new Date(remoteTask.updated_at) > new Date(localTask.updated_at))) {
+        taskMap.set(remoteTask.id, remoteTask);
+      }
+    });
+    
+    return Array.from(taskMap.values()).sort((a, b) => 
+      (a.created_at || '').localeCompare(b.created_at || '')
     );
+  };
+
+  const toggleTaskCompletion = async (taskId: string) => {
+    try {
+      const updatedTasks = tasks.map(task =>
+        task.id === taskId
+          ? { 
+              ...task, 
+              completed: !task.completed,
+              updated_at: new Date().toISOString()
+            }
+          : task
+      );
+
+      // Update local state and storage immediately
+      setTasks(updatedTasks);
+      await saveLocalTasks(updatedTasks);
+
+      // Try to sync with Supabase in the background
+      if (isOnline) {
+        const updatedTask = updatedTasks.find(task => task.id === taskId);
+        if (updatedTask) {
+          try {
+            await SupabaseService.upsertTask(updatedTask);
+            await saveLastSyncTime();
+          } catch (err) {
+            console.error('Error syncing task update:', err);
+            setIsOnline(false);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling task completion:', err);
+      setError('Failed to update task.');
+    }
+  };
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await syncWithSupabase(false);
+    setIsRefreshing(false);
+  }, []);
+
+  const handleManualSync = async () => {
+    await syncWithSupabase(false);
   };
 
   const completedTasksCount = tasks.filter(task => task.completed).length;
   const totalTasks = tasks.length;
   const progressPercentage = totalTasks > 0 ? (completedTasksCount / totalTasks) * 100 : 0;
+
+  const formatLastSyncTime = (date: Date | null) => {
+    if (!date) return 'Never';
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return date.toLocaleDateString();
+  };
 
   if (isLoading) {
     return (
@@ -144,13 +316,55 @@ export default function CareCardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#007AFF']}
+            tintColor="#007AFF"
+          />
+        }
+      >
         <View style={styles.header}>
           <Heart size={32} color="#007AFF" strokeWidth={2} />
           <Text style={styles.title}>Care Card</Text>
           <Text style={styles.subtitle}>
             Your personalized care plan and daily tasks
           </Text>
+        </View>
+
+        {/* Sync Status */}
+        <View style={styles.syncStatusContainer}>
+          <View style={styles.syncStatus}>
+            {isOnline ? (
+              <Wifi size={16} color="#34C759" strokeWidth={2} />
+            ) : (
+              <WifiOff size={16} color="#FF9500" strokeWidth={2} />
+            )}
+            <Text style={[
+              styles.syncStatusText,
+              { color: isOnline ? '#34C759' : '#FF9500' }
+            ]}>
+              {isOnline ? 'Online' : 'Offline'}
+            </Text>
+            <Text style={styles.lastSyncText}>
+              Last sync: {formatLastSyncTime(lastSyncTime)}
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.syncButton}
+            onPress={handleManualSync}
+            disabled={isSyncing || !isOnline}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color="#007AFF" />
+            ) : (
+              <RefreshCw size={16} color={isOnline ? "#007AFF" : "#8E8E93"} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
         </View>
 
         {error && (
@@ -228,6 +442,9 @@ export default function CareCardScreen() {
           <Text style={styles.footerText}>
             Tap any task to mark it as complete
           </Text>
+          <Text style={styles.footerSubtext}>
+            {isOnline ? 'Changes sync automatically' : 'Changes saved locally'}
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -258,7 +475,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   title: {
     fontSize: 32,
@@ -274,6 +491,40 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 8,
     paddingHorizontal: 20,
+  },
+  syncStatusContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  syncStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  syncStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  lastSyncText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginLeft: 12,
+  },
+  syncButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F2F2F7',
   },
   errorContainer: {
     flexDirection: 'row',
@@ -414,6 +665,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8E8E93',
     textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  footerSubtext: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: 4,
     fontStyle: 'italic',
   },
 });
