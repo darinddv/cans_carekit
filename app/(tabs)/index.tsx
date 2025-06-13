@@ -21,31 +21,31 @@ const LAST_SYNC_KEY = '@last_sync';
 // Default tasks data with proper UUIDs
 const defaultTasks: CareTask[] = [
   {
-    id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    id: uuidv4(),
     title: 'Take Morning Medication',
     time: '8:00 AM',
     completed: false,
   },
   {
-    id: 'b2c3d4e5-f6g7-8901-bcde-f23456789012',
+    id: uuidv4(),
     title: 'Morning Exercise',
     time: '9:00 AM',
     completed: false,
   },
   {
-    id: 'c3d4e5f6-g7h8-9012-cdef-345678901234',
+    id: uuidv4(),
     title: 'Mindfulness Practice',
     time: '6:00 PM',
     completed: false,
   },
   {
-    id: 'd4e5f6g7-h8i9-0123-def0-456789012345',
+    id: uuidv4(),
     title: 'Evening Medication',
     time: '8:00 PM',
     completed: false,
   },
   {
-    id: 'e5f6g7h8-i9j0-1234-ef01-567890123456',
+    id: uuidv4(),
     title: 'Sleep Preparation',
     time: '10:00 PM',
     completed: false,
@@ -120,7 +120,8 @@ export default function CareCardScreen() {
 
       // Validate that all tasks have proper UUID format
       const validTasks = storedTasks.filter(task => 
-        task.id && typeof task.id === 'string' && task.id.length >= 32
+        task.id && typeof task.id === 'string' && 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(task.id)
       );
 
       // If we don't have valid tasks, use defaults
