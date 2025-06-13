@@ -38,7 +38,7 @@ export class SupabaseService {
     }
   }
 
-  // Upsert (insert or update) a task
+  // Upsert (insert or update) a task using Supabase's native upsert
   static async upsertTask(task: CareTask): Promise<CareTask> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -47,64 +47,31 @@ export class SupabaseService {
         throw new Error('User not authenticated');
       }
 
-      // Check if task exists
-      const { data: existingTasks, error: checkError } = await supabase
+      const taskData = {
+        id: task.id,
+        title: task.title,
+        time: task.time,
+        completed: task.completed,
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Use Supabase's native upsert functionality
+      const { data, error } = await supabase
         .from('tasks')
-        .select('id')
-        .eq('id', task.id)
-        .eq('user_id', user.id);
+        .upsert(taskData, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .select()
+        .single();
 
-      if (checkError) {
-        console.error('Error checking existing task:', checkError);
-        throw checkError;
+      if (error) {
+        console.error('Error upserting task:', error);
+        throw error;
       }
 
-      const taskExists = existingTasks && existingTasks.length > 0;
-
-      if (taskExists) {
-        // Update existing task
-        const { data, error } = await supabase
-          .from('tasks')
-          .update({
-            title: task.title,
-            time: task.time,
-            completed: task.completed,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', task.id)
-          .eq('user_id', user.id)
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error updating task:', error);
-          throw error;
-        }
-
-        return data;
-      } else {
-        // Insert new task
-        const { data, error } = await supabase
-          .from('tasks')
-          .insert({
-            id: task.id,
-            title: task.title,
-            time: task.time,
-            completed: task.completed,
-            user_id: user.id,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error('Error inserting task:', error);
-          throw error;
-        }
-
-        return data;
-      }
+      return data;
     } catch (error) {
       console.error('Error upserting task to Supabase:', error);
       throw error;
@@ -120,20 +87,29 @@ export class SupabaseService {
         throw new Error('User not authenticated');
       }
 
-      // Process tasks one by one to avoid upsert issues
-      const syncedTasks: CareTask[] = [];
-      
-      for (const task of tasks) {
-        try {
-          const syncedTask = await this.upsertTask(task);
-          syncedTasks.push(syncedTask);
-        } catch (error) {
-          console.error(`Error syncing task ${task.id}:`, error);
-          // Continue with other tasks even if one fails
-        }
+      const tasksWithUserId = tasks.map(task => ({
+        id: task.id,
+        title: task.title,
+        time: task.time,
+        completed: task.completed,
+        user_id: user.id,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { data, error } = await supabase
+        .from('tasks')
+        .upsert(tasksWithUserId, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .select();
+
+      if (error) {
+        console.error('Error syncing tasks:', error);
+        throw error;
       }
 
-      return syncedTasks;
+      return data || [];
     } catch (error) {
       console.error('Error syncing tasks to Supabase:', error);
       throw error;
