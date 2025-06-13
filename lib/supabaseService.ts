@@ -27,6 +27,7 @@ export class SupabaseService {
         .order('created_at', { ascending: true });
 
       if (error) {
+        console.error('Supabase fetch error:', error);
         throw error;
       }
 
@@ -46,60 +47,59 @@ export class SupabaseService {
         throw new Error('User not authenticated');
       }
 
-      const taskData = {
-        id: task.id,
-        title: task.title,
-        time: task.time,
-        completed: task.completed,
-        user_id: user.id,
-        updated_at: new Date().toISOString(),
-      };
-
-      // First try to update the existing task
-      const { data: existingTask } = await supabase
+      // Check if task exists
+      const { data: existingTasks, error: checkError } = await supabase
         .from('tasks')
         .select('id')
         .eq('id', task.id)
-        .eq('user_id', user.id)
-        .single();
+        .eq('user_id', user.id);
 
-      if (existingTask) {
-        // Task exists, update it
+      if (checkError) {
+        console.error('Error checking existing task:', checkError);
+        throw checkError;
+      }
+
+      const taskExists = existingTasks && existingTasks.length > 0;
+
+      if (taskExists) {
+        // Update existing task
         const { data, error } = await supabase
           .from('tasks')
           .update({
-            title: taskData.title,
-            time: taskData.time,
-            completed: taskData.completed,
-            updated_at: taskData.updated_at,
+            title: task.title,
+            time: task.time,
+            completed: task.completed,
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', taskData.id)
+          .eq('id', task.id)
           .eq('user_id', user.id)
           .select()
           .single();
 
         if (error) {
+          console.error('Error updating task:', error);
           throw error;
         }
 
         return data;
       } else {
-        // Task doesn't exist, insert it
+        // Insert new task
         const { data, error } = await supabase
           .from('tasks')
           .insert({
-            id: taskData.id,
-            title: taskData.title,
-            time: taskData.time,
-            completed: taskData.completed,
-            user_id: taskData.user_id,
+            id: task.id,
+            title: task.title,
+            time: task.time,
+            completed: task.completed,
+            user_id: user.id,
             created_at: new Date().toISOString(),
-            updated_at: taskData.updated_at,
+            updated_at: new Date().toISOString(),
           })
           .select()
           .single();
 
         if (error) {
+          console.error('Error inserting task:', error);
           throw error;
         }
 
@@ -156,6 +156,7 @@ export class SupabaseService {
         .eq('user_id', user.id);
 
       if (error) {
+        console.error('Error deleting task:', error);
         throw error;
       }
     } catch (error) {
@@ -170,6 +171,7 @@ export class SupabaseService {
       const { data: { user } } = await supabase.auth.getUser();
       return !!user;
     } catch (error) {
+      console.error('Error checking authentication:', error);
       return false;
     }
   }
@@ -179,6 +181,7 @@ export class SupabaseService {
     try {
       const { error } = await supabase.auth.signInAnonymously();
       if (error) {
+        console.error('Error signing in anonymously:', error);
         throw error;
       }
     } catch (error) {
@@ -192,6 +195,7 @@ export class SupabaseService {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) {
+        console.error('Error signing out:', error);
         throw error;
       }
     } catch (error) {
