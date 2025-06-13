@@ -11,6 +11,24 @@ export interface CareTask {
 }
 
 export class SupabaseService {
+  // Sign in with email and password
+  static async signInWithEmailAndPassword(email: string, password: string): Promise<void> {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Error signing in with email and password:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error signing in with email and password:', error);
+      throw error;
+    }
+  }
+
   // Fetch all tasks for the current user
   static async fetchTasks(): Promise<CareTask[]> {
     try {
@@ -157,17 +175,14 @@ export class SupabaseService {
     }
   }
 
-  // Sign in anonymously (for demo purposes)
-  static async signInAnonymously(): Promise<void> {
+  // Get current user
+  static async getCurrentUser() {
     try {
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) {
-        console.error('Error signing in anonymously:', error);
-        throw error;
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      return user;
     } catch (error) {
-      console.error('Error signing in anonymously:', error);
-      throw error;
+      console.error('Error getting current user:', error);
+      return null;
     }
   }
 

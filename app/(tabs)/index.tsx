@@ -10,10 +10,11 @@ import {
   Platform,
   RefreshControl
 } from 'react-native';
-import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw } from 'lucide-react-native';
+import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { v4 as uuidv4 } from 'uuid';
 import { SupabaseService, CareTask } from '@/lib/supabaseService';
+import { router } from 'expo-router';
 
 const STORAGE_KEY = '@care_tasks';
 const LAST_SYNC_KEY = '@last_sync';
@@ -88,8 +89,9 @@ export default function CareCardScreen() {
       // Check authentication and sync
       const isAuthenticated = await SupabaseService.isAuthenticated();
       if (!isAuthenticated) {
-        // Sign in anonymously for demo purposes
-        await SupabaseService.signInAnonymously();
+        // If not authenticated, redirect to login
+        router.replace('/login');
+        return;
       }
 
       // Initial sync with Supabase
@@ -199,6 +201,7 @@ export default function CareCardScreen() {
       const isAuthenticated = await SupabaseService.isAuthenticated();
       if (!isAuthenticated) {
         setIsOnline(false);
+        router.replace('/login');
         return;
       }
 
@@ -304,6 +307,16 @@ export default function CareCardScreen() {
     await syncWithSupabase(false);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await SupabaseService.signOut();
+      // Navigation will be handled by the auth state change in _layout.tsx
+    } catch (err) {
+      console.error('Error signing out:', err);
+      setError('Failed to sign out. Please try again.');
+    }
+  };
+
   const completedTasksCount = tasks.filter(task => task.completed).length;
   const totalTasks = tasks.length;
   const progressPercentage = totalTasks > 0 ? (completedTasksCount / totalTasks) * 100 : 0;
@@ -346,8 +359,19 @@ export default function CareCardScreen() {
         }
       >
         <View style={styles.header}>
-          <Heart size={32} color="#007AFF" strokeWidth={2} />
-          <Text style={styles.title}>Care Card</Text>
+          <View style={styles.headerTop}>
+            <View style={styles.headerLeft}>
+              <Heart size={32} color="#007AFF" strokeWidth={2} />
+              <Text style={styles.title}>Care Card</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+              activeOpacity={0.7}
+            >
+              <LogOut size={20} color="#FF3B30" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.subtitle}>
             Your personalized care plan and daily tasks
           </Text>
@@ -491,23 +515,34 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   header: {
-    alignItems: 'center',
     marginBottom: 24,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     fontSize: 32,
     fontWeight: '700',
     color: '#1C1C1E',
-    marginTop: 12,
-    textAlign: 'center',
+    marginLeft: 12,
+  },
+  signOutButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFEBEE',
   },
   subtitle: {
     fontSize: 16,
     color: '#8E8E93',
-    textAlign: 'center',
     lineHeight: 22,
     marginTop: 8,
-    paddingHorizontal: 20,
   },
   syncStatusContainer: {
     flexDirection: 'row',
