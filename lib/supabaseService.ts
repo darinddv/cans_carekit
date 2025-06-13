@@ -21,7 +21,7 @@ export class SupabaseService {
       }
 
       const { data, error } = await supabase
-        .from('care_tasks')
+        .from('tasks')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
