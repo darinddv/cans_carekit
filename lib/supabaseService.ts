@@ -47,6 +47,7 @@ export class SupabaseService {
         throw new Error('User not authenticated');
       }
 
+      // Prepare task data with explicit user_id
       const taskData = {
         id: task.id,
         title: task.title,
@@ -55,6 +56,8 @@ export class SupabaseService {
         user_id: user.id,
         updated_at: new Date().toISOString(),
       };
+
+      console.log('Upserting task:', taskData);
 
       // Use Supabase's native upsert functionality
       const { data, error } = await supabase
@@ -95,6 +98,8 @@ export class SupabaseService {
         user_id: user.id,
         updated_at: new Date().toISOString(),
       }));
+
+      console.log('Syncing tasks:', tasksWithUserId);
 
       const { data, error } = await supabase
         .from('tasks')

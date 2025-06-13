@@ -82,16 +82,6 @@ export default function CareCardScreen() {
       setIsLoading(true);
       setError(null);
 
-      // Clear old data with invalid IDs during development
-      // This ensures we start fresh with proper UUIDs
-      if (Platform.OS === 'web') {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(LAST_SYNC_KEY);
-      } else {
-        await AsyncStorage.removeItem(STORAGE_KEY);
-        await AsyncStorage.removeItem(LAST_SYNC_KEY);
-      }
-
       // Load tasks from local storage first
       await loadLocalTasks();
 
@@ -293,6 +283,7 @@ export default function CareCardScreen() {
           } catch (err) {
             console.error('Error syncing task update:', err);
             setIsOnline(false);
+            // Don't show error to user, just go offline
           }
         }
       }
