@@ -53,7 +53,7 @@ export class SupabaseService {
       };
 
       const { data, error } = await supabase
-        .from('care_tasks')
+        .from('tasks')
         .upsert(taskData, { 
           onConflict: 'id',
           ignoreDuplicates: false 
@@ -88,7 +88,7 @@ export class SupabaseService {
       }));
 
       const { data, error } = await supabase
-        .from('care_tasks')
+        .from('tasks')
         .upsert(tasksWithUserId, { 
           onConflict: 'id',
           ignoreDuplicates: false 
@@ -116,7 +116,7 @@ export class SupabaseService {
       }
 
       const { error } = await supabase
-        .from('care_tasks')
+        .from('tasks')
         .delete()
         .eq('id', taskId)
         .eq('user_id', user.id);

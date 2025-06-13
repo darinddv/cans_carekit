@@ -38,7 +38,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 export type Database = {
   public: {
     Tables: {
-      care_tasks: {
+      tasks: {
         Row: {
           id: string;
           title: string;
