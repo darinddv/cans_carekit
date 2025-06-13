@@ -12,39 +12,40 @@ import {
 } from 'react-native';
 import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { v4 as uuidv4 } from 'uuid';
 import { SupabaseService, CareTask } from '@/lib/supabaseService';
 
 const STORAGE_KEY = '@care_tasks';
 const LAST_SYNC_KEY = '@last_sync';
 
-// Default tasks data
+// Default tasks data with proper UUIDs
 const defaultTasks: CareTask[] = [
   {
-    id: '1',
+    id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     title: 'Take Morning Medication',
     time: '8:00 AM',
     completed: false,
   },
   {
-    id: '2',
+    id: 'b2c3d4e5-f6g7-8901-bcde-f23456789012',
     title: 'Morning Exercise',
     time: '9:00 AM',
     completed: false,
   },
   {
-    id: '3',
+    id: 'c3d4e5f6-g7h8-9012-cdef-345678901234',
     title: 'Mindfulness Practice',
     time: '6:00 PM',
     completed: false,
   },
   {
-    id: '4',
+    id: 'd4e5f6g7-h8i9-0123-def0-456789012345',
     title: 'Evening Medication',
     time: '8:00 PM',
     completed: false,
   },
   {
-    id: '5',
+    id: 'e5f6g7h8-i9j0-1234-ef01-567890123456',
     title: 'Sleep Preparation',
     time: '10:00 PM',
     completed: false,
@@ -80,6 +81,16 @@ export default function CareCardScreen() {
     try {
       setIsLoading(true);
       setError(null);
+
+      // Clear old data with invalid IDs during development
+      // This ensures we start fresh with proper UUIDs
+      if (Platform.OS === 'web') {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LAST_SYNC_KEY);
+      } else {
+        await AsyncStorage.removeItem(STORAGE_KEY);
+        await AsyncStorage.removeItem(LAST_SYNC_KEY);
+      }
 
       // Load tasks from local storage first
       await loadLocalTasks();
@@ -117,10 +128,24 @@ export default function CareCardScreen() {
         storedTasks = stored ? JSON.parse(stored) : defaultTasks;
       }
 
-      setTasks(storedTasks);
+      // Validate that all tasks have proper UUID format
+      const validTasks = storedTasks.filter(task => 
+        task.id && typeof task.id === 'string' && task.id.length >= 32
+      );
+
+      // If we don't have valid tasks, use defaults
+      const tasksToUse = validTasks.length > 0 ? validTasks : defaultTasks;
+      
+      setTasks(tasksToUse);
+      
+      // Save the valid tasks back to storage
+      if (validTasks.length !== storedTasks.length) {
+        await saveLocalTasks(tasksToUse);
+      }
     } catch (err) {
       console.error('Error loading local tasks:', err);
       setTasks(defaultTasks);
+      await saveLocalTasks(defaultTasks);
     }
   };
 
