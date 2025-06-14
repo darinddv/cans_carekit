@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
+  Dimensions,
+  ScrollView,
 } from 'react-native';
 import { Heart, Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
 import { SupabaseService } from '@/lib/supabaseService';
@@ -21,6 +22,15 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowDimensions(window);
+    });
+
+    return () => subscription?.remove();
+  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -48,111 +58,252 @@ export default function LoginScreen() {
     setError(null);
   };
 
+  const isWeb = Platform.OS === 'web';
+  const isTablet = windowDimensions.width >= 768;
+  const isDesktop = windowDimensions.width >= 1024;
+  const isLargeDesktop = windowDimensions.width >= 1440;
+
+  const getResponsiveStyles = () => {
+    const baseStyles = styles;
+    
+    if (isWeb && isDesktop) {
+      return {
+        ...baseStyles,
+        container: {
+          ...baseStyles.container,
+          backgroundColor: '#F8F9FA',
+        },
+        content: {
+          ...baseStyles.content,
+          maxWidth: isLargeDesktop ? 480 : 420,
+          alignSelf: 'center',
+          backgroundColor: '#FFFFFF',
+          borderRadius: 24,
+          padding: isLargeDesktop ? 48 : 40,
+          marginHorizontal: 24,
+          shadowColor: '#000',
+          shadowOpacity: 0.1,
+          shadowOffset: { width: 0, height: 8 },
+          shadowRadius: 24,
+          elevation: 8,
+        },
+        title: {
+          ...baseStyles.title,
+          fontSize: isLargeDesktop ? 40 : 36,
+        },
+        subtitle: {
+          ...baseStyles.subtitle,
+          fontSize: isLargeDesktop ? 18 : 16,
+        },
+        input: {
+          ...baseStyles.input,
+          fontSize: isLargeDesktop ? 18 : 16,
+          paddingVertical: isLargeDesktop ? 20 : 18,
+        },
+        loginButtonText: {
+          ...baseStyles.loginButtonText,
+          fontSize: isLargeDesktop ? 20 : 18,
+        },
+        demoButtonText: {
+          ...baseStyles.demoButtonText,
+          fontSize: isLargeDesktop ? 18 : 16,
+        },
+      };
+    } else if (isWeb && isTablet) {
+      return {
+        ...baseStyles,
+        content: {
+          ...baseStyles.content,
+          maxWidth: 480,
+          alignSelf: 'center',
+          paddingHorizontal: 32,
+        },
+        title: {
+          ...baseStyles.title,
+          fontSize: 36,
+        },
+        subtitle: {
+          ...baseStyles.subtitle,
+          fontSize: 18,
+        },
+      };
+    }
+    
+    return baseStyles;
+  };
+
+  const responsiveStyles = getResponsiveStyles();
+
+  const ContentWrapper = isWeb && isDesktop ? ScrollView : View;
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={responsiveStyles.container}>
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <Heart size={48} color="#007AFF" strokeWidth={2} />
-            </View>
-            <Text style={styles.title}>Care Card</Text>
-            <Text style={styles.subtitle}>
-              Sign in to access your personalized care plan
-            </Text>
-          </View>
-
-          {/* Login Form */}
-          <View style={styles.form}>
-            {error && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{error}</Text>
+        <ContentWrapper 
+          style={isWeb && isDesktop ? { flex: 1 } : undefined}
+          contentContainerStyle={isWeb && isDesktop ? { flex: 1, justifyContent: 'center' } : undefined}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={responsiveStyles.content}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={[
+                styles.iconContainer,
+                isWeb && isDesktop && {
+                  width: isLargeDesktop ? 100 : 90,
+                  height: isLargeDesktop ? 100 : 90,
+                  borderRadius: isLargeDesktop ? 50 : 45,
+                }
+              ]}>
+                <Heart 
+                  size={isWeb && isDesktop ? (isLargeDesktop ? 56 : 52) : 48} 
+                  color="#007AFF" 
+                  strokeWidth={2} 
+                />
               </View>
-            )}
-
-            {/* Email Input */}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputIconContainer}>
-                <Mail size={20} color="#8E8E93" strokeWidth={2} />
-              </View>
-              <TextInput
-                style={styles.input}
-                placeholder="Email address"
-                placeholderTextColor="#8E8E93"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+              <Text style={responsiveStyles.title}>Care Card</Text>
+              <Text style={responsiveStyles.subtitle}>
+                Sign in to access your personalized care plan
+              </Text>
             </View>
 
-            {/* Password Input */}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputIconContainer}>
-                <Lock size={20} color="#8E8E93" strokeWidth={2} />
+            {/* Login Form */}
+            <View style={styles.form}>
+              {error && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+
+              {/* Email Input */}
+              <View style={[
+                styles.inputContainer,
+                isWeb && isDesktop && {
+                  paddingVertical: isLargeDesktop ? 8 : 6,
+                  borderRadius: 20,
+                }
+              ]}>
+                <View style={styles.inputIconContainer}>
+                  <Mail 
+                    size={isWeb && isDesktop ? 22 : 20} 
+                    color="#8E8E93" 
+                    strokeWidth={2} 
+                  />
+                </View>
+                <TextInput
+                  style={responsiveStyles.input}
+                  placeholder="Email address"
+                  placeholderTextColor="#8E8E93"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
               </View>
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="Password"
-                placeholderTextColor="#8E8E93"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
+
+              {/* Password Input */}
+              <View style={[
+                styles.inputContainer,
+                isWeb && isDesktop && {
+                  paddingVertical: isLargeDesktop ? 8 : 6,
+                  borderRadius: 20,
+                }
+              ]}>
+                <View style={styles.inputIconContainer}>
+                  <Lock 
+                    size={isWeb && isDesktop ? 22 : 20} 
+                    color="#8E8E93" 
+                    strokeWidth={2} 
+                  />
+                </View>
+                <TextInput
+                  style={[responsiveStyles.input, styles.passwordInput]}
+                  placeholder="Password"
+                  placeholderTextColor="#8E8E93"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                />
+                <TouchableOpacity
+                  style={styles.eyeButton}
+                  onPress={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                >
+                  {showPassword ? (
+                    <EyeOff 
+                      size={isWeb && isDesktop ? 22 : 20} 
+                      color="#8E8E93" 
+                      strokeWidth={2} 
+                    />
+                  ) : (
+                    <Eye 
+                      size={isWeb && isDesktop ? 22 : 20} 
+                      color="#8E8E93" 
+                      strokeWidth={2} 
+                    />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Login Button */}
               <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
+                style={[
+                  styles.loginButton, 
+                  isLoading && styles.loginButtonDisabled,
+                  isWeb && isDesktop && {
+                    paddingVertical: isLargeDesktop ? 22 : 20,
+                    borderRadius: 20,
+                  }
+                ]}
+                onPress={handleLogin}
                 disabled={isLoading}
+                activeOpacity={0.8}
               >
-                {showPassword ? (
-                  <EyeOff size={20} color="#8E8E93" strokeWidth={2} />
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Eye size={20} color="#8E8E93" strokeWidth={2} />
+                  <Text style={responsiveStyles.loginButtonText}>Sign In</Text>
                 )}
+              </TouchableOpacity>
+
+              {/* Demo Login Button */}
+              <TouchableOpacity
+                style={[
+                  styles.demoButton,
+                  isWeb && isDesktop && {
+                    paddingVertical: isLargeDesktop ? 20 : 18,
+                    borderRadius: 20,
+                  }
+                ]}
+                onPress={handleDemoLogin}
+                disabled={isLoading}
+                activeOpacity={0.7}
+              >
+                <Text style={responsiveStyles.demoButtonText}>Use Demo Account</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Login Button */}
-            <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Demo Login Button */}
-            <TouchableOpacity
-              style={styles.demoButton}
-              onPress={handleDemoLogin}
-              disabled={isLoading}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.demoButtonText}>Use Demo Account</Text>
-            </TouchableOpacity>
+            {/* Footer */}
+            <View style={styles.footer}>
+              <Text style={[
+                styles.footerText,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 14 : 13,
+                }
+              ]}>
+                Secure authentication powered by Supabase
+              </Text>
+            </View>
           </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              Secure authentication powered by Supabase
-            </Text>
-          </View>
-        </View>
+        </ContentWrapper>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

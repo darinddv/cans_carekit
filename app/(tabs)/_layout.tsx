@@ -1,8 +1,23 @@
 import { Tabs } from 'expo-router';
-import { Platform } from 'react-native';
+import { Platform, Dimensions } from 'react-native';
 import { Heart, Activity, ChartBar as BarChart3, Users } from 'lucide-react-native';
+import { useState, useEffect } from 'react';
 
 export default function TabLayout() {
+  const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowWidth(window.width);
+    });
+
+    return () => subscription?.remove();
+  }, []);
+
+  const isWeb = Platform.OS === 'web';
+  const isTablet = windowWidth >= 768;
+  const isDesktop = windowWidth >= 1024;
+
   return (
     <Tabs
       screenOptions={{
@@ -11,16 +26,27 @@ export default function TabLayout() {
         tabBarInactiveTintColor: '#8E8E93',
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopWidth: 0.5,
+          borderTopWidth: isWeb ? 1 : 0.5,
           borderTopColor: '#E5E5EA',
-          paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          paddingTop: isWeb && isDesktop ? 12 : 8,
+          paddingBottom: Platform.OS === 'ios' ? 24 : isWeb && isDesktop ? 12 : 8,
+          height: Platform.OS === 'ios' ? 88 : isWeb && isDesktop ? 72 : 64,
+          paddingHorizontal: isWeb && isDesktop ? 24 : 0,
+          ...(isWeb && isDesktop && {
+            shadowColor: '#000',
+            shadowOpacity: 0.1,
+            shadowOffset: { width: 0, height: -2 },
+            shadowRadius: 8,
+            elevation: 8,
+          }),
         },
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '500',
-          marginTop: 4,
+          fontSize: isWeb && isDesktop ? 12 : 10,
+          fontWeight: '600',
+          marginTop: isWeb && isDesktop ? 6 : 4,
+        },
+        tabBarIconStyle: {
+          marginTop: isWeb && isDesktop ? 4 : 0,
         },
       }}
     >
@@ -29,7 +55,11 @@ export default function TabLayout() {
         options={{
           title: 'Care Card',
           tabBarIcon: ({ size, color }) => (
-            <Heart size={size} color={color} strokeWidth={2} />
+            <Heart 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
           ),
         }}
       />
@@ -38,7 +68,11 @@ export default function TabLayout() {
         options={{
           title: 'Symptoms',
           tabBarIcon: ({ size, color }) => (
-            <Activity size={size} color={color} strokeWidth={2} />
+            <Activity 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
           ),
         }}
       />
@@ -47,7 +81,11 @@ export default function TabLayout() {
         options={{
           title: 'Insights',
           tabBarIcon: ({ size, color }) => (
-            <BarChart3 size={size} color={color} strokeWidth={2} />
+            <BarChart3 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
           ),
         }}
       />
@@ -56,7 +94,11 @@ export default function TabLayout() {
         options={{
           title: 'Connect',
           tabBarIcon: ({ size, color }) => (
-            <Users size={size} color={color} strokeWidth={2} />
+            <Users 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
           ),
         }}
       />

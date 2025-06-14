@@ -8,7 +8,8 @@ import {
   TouchableOpacity, 
   ActivityIndicator,
   Platform,
-  RefreshControl
+  RefreshControl,
+  Dimensions
 } from 'react-native';
 import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,15 @@ export default function CareCardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setWindowDimensions(window);
+    });
+
+    return () => subscription?.remove();
+  }, []);
 
   // Load tasks and initialize sync on component mount
   useEffect(() => {
@@ -248,21 +258,108 @@ export default function CareCardScreen() {
     return date.toLocaleDateString();
   };
 
+  const isWeb = Platform.OS === 'web';
+  const isTablet = windowDimensions.width >= 768;
+  const isDesktop = windowDimensions.width >= 1024;
+  const isLargeDesktop = windowDimensions.width >= 1440;
+
+  const getResponsiveStyles = () => {
+    const baseStyles = styles;
+    
+    if (isWeb && isDesktop) {
+      return {
+        ...baseStyles,
+        container: {
+          ...baseStyles.container,
+          backgroundColor: '#F8F9FA',
+        },
+        content: {
+          ...baseStyles.content,
+          maxWidth: isLargeDesktop ? 1200 : 1000,
+          alignSelf: 'center',
+          paddingHorizontal: isLargeDesktop ? 40 : 32,
+          paddingTop: isLargeDesktop ? 48 : 40,
+        },
+        title: {
+          ...baseStyles.title,
+          fontSize: isLargeDesktop ? 40 : 36,
+        },
+        subtitle: {
+          ...baseStyles.subtitle,
+          fontSize: isLargeDesktop ? 18 : 16,
+        },
+        progressTitle: {
+          ...baseStyles.progressTitle,
+          fontSize: isLargeDesktop ? 22 : 20,
+        },
+        taskTitle: {
+          ...baseStyles.taskTitle,
+          fontSize: isLargeDesktop ? 20 : 18,
+        },
+        taskTime: {
+          ...baseStyles.taskTime,
+          fontSize: isLargeDesktop ? 16 : 15,
+        },
+        noTasksTitle: {
+          ...baseStyles.noTasksTitle,
+          fontSize: isLargeDesktop ? 28 : 26,
+        },
+        noTasksSubtitle: {
+          ...baseStyles.noTasksSubtitle,
+          fontSize: isLargeDesktop ? 18 : 16,
+        },
+      };
+    } else if (isWeb && isTablet) {
+      return {
+        ...baseStyles,
+        content: {
+          ...baseStyles.content,
+          maxWidth: 800,
+          alignSelf: 'center',
+          paddingHorizontal: 32,
+        },
+        title: {
+          ...baseStyles.title,
+          fontSize: 36,
+        },
+        subtitle: {
+          ...baseStyles.subtitle,
+          fontSize: 18,
+        },
+      };
+    }
+    
+    return baseStyles;
+  };
+
+  const responsiveStyles = getResponsiveStyles();
+
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
+      <SafeAreaView style={responsiveStyles.container}>
+        <View style={[
+          styles.loadingContainer,
+          isWeb && isDesktop && {
+            maxWidth: isLargeDesktop ? 1200 : 1000,
+            alignSelf: 'center',
+          }
+        ]}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading your care tasks...</Text>
+          <Text style={[
+            styles.loadingText,
+            isWeb && isDesktop && {
+              fontSize: isLargeDesktop ? 18 : 16,
+            }
+          ]}>Loading your care tasks...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={responsiveStyles.container}>
       <ScrollView 
-        contentContainerStyle={styles.content} 
+        contentContainerStyle={responsiveStyles.content} 
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -276,94 +373,203 @@ export default function CareCardScreen() {
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View style={styles.headerLeft}>
-              <Heart size={32} color="#007AFF" strokeWidth={2} />
-              <Text style={styles.title}>Care Card</Text>
+              <Heart 
+                size={isWeb && isDesktop ? (isLargeDesktop ? 40 : 36) : 32} 
+                color="#007AFF" 
+                strokeWidth={2} 
+              />
+              <Text style={responsiveStyles.title}>Care Card</Text>
             </View>
             <TouchableOpacity
-              style={styles.signOutButton}
+              style={[
+                styles.signOutButton,
+                isWeb && isDesktop && {
+                  padding: 12,
+                  borderRadius: 12,
+                }
+              ]}
               onPress={handleSignOut}
               activeOpacity={0.7}
             >
-              <LogOut size={20} color="#FF3B30" strokeWidth={2} />
+              <LogOut 
+                size={isWeb && isDesktop ? 24 : 20} 
+                color="#FF3B30" 
+                strokeWidth={2} 
+              />
             </TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>
+          <Text style={responsiveStyles.subtitle}>
             Your personalized care plan and daily tasks
           </Text>
         </View>
 
         {/* Sync Status */}
-        <View style={styles.syncStatusContainer}>
+        <View style={[
+          styles.syncStatusContainer,
+          isWeb && isDesktop && {
+            borderRadius: 16,
+            padding: isLargeDesktop ? 20 : 18,
+          }
+        ]}>
           <View style={styles.syncStatus}>
             {isOnline ? (
-              <Wifi size={16} color="#34C759" strokeWidth={2} />
+              <Wifi 
+                size={isWeb && isDesktop ? 18 : 16} 
+                color="#34C759" 
+                strokeWidth={2} 
+              />
             ) : (
-              <WifiOff size={16} color="#FF9500" strokeWidth={2} />
+              <WifiOff 
+                size={isWeb && isDesktop ? 18 : 16} 
+                color="#FF9500" 
+                strokeWidth={2} 
+              />
             )}
             <Text style={[
               styles.syncStatusText,
-              { color: isOnline ? '#34C759' : '#FF9500' }
+              { color: isOnline ? '#34C759' : '#FF9500' },
+              isWeb && isDesktop && {
+                fontSize: isLargeDesktop ? 16 : 15,
+              }
             ]}>
               {isOnline ? 'Online' : 'Offline'}
             </Text>
-            <Text style={styles.lastSyncText}>
+            <Text style={[
+              styles.lastSyncText,
+              isWeb && isDesktop && {
+                fontSize: isLargeDesktop ? 14 : 13,
+              }
+            ]}>
               Last sync: {formatLastSyncTime(lastSyncTime)}
             </Text>
           </View>
           <TouchableOpacity 
-            style={styles.syncButton}
+            style={[
+              styles.syncButton,
+              isWeb && isDesktop && {
+                padding: 12,
+                borderRadius: 12,
+              }
+            ]}
             onPress={handleManualSync}
             disabled={isSyncing || !isOnline}
           >
             {isSyncing ? (
               <ActivityIndicator size="small" color="#007AFF" />
             ) : (
-              <RefreshCw size={16} color={isOnline ? "#007AFF" : "#8E8E93"} strokeWidth={2} />
+              <RefreshCw 
+                size={isWeb && isDesktop ? 18 : 16} 
+                color={isOnline ? "#007AFF" : "#8E8E93"} 
+                strokeWidth={2} 
+              />
             )}
           </TouchableOpacity>
         </View>
 
         {error && (
-          <View style={styles.errorContainer}>
-            <AlertCircle size={20} color="#FF3B30" strokeWidth={2} />
-            <Text style={styles.errorText}>{error}</Text>
+          <View style={[
+            styles.errorContainer,
+            isWeb && isDesktop && {
+              borderRadius: 16,
+              padding: isLargeDesktop ? 20 : 18,
+            }
+          ]}>
+            <AlertCircle 
+              size={isWeb && isDesktop ? 24 : 20} 
+              color="#FF3B30" 
+              strokeWidth={2} 
+            />
+            <Text style={[
+              styles.errorText,
+              isWeb && isDesktop && {
+                fontSize: isLargeDesktop ? 16 : 15,
+              }
+            ]}>{error}</Text>
           </View>
         )}
 
         {/* Show "No tasks assigned" message if no tasks */}
         {tasks.length === 0 ? (
-          <View style={styles.noTasksContainer}>
-            <View style={styles.noTasksIcon}>
-              <Heart size={48} color="#8E8E93" strokeWidth={1.5} />
+          <View style={[
+            styles.noTasksContainer,
+            isWeb && isDesktop && {
+              paddingVertical: isLargeDesktop ? 80 : 70,
+              paddingHorizontal: isLargeDesktop ? 60 : 50,
+            }
+          ]}>
+            <View style={[
+              styles.noTasksIcon,
+              isWeb && isDesktop && {
+                width: isLargeDesktop ? 120 : 110,
+                height: isLargeDesktop ? 120 : 110,
+                borderRadius: isLargeDesktop ? 60 : 55,
+              }
+            ]}>
+              <Heart 
+                size={isWeb && isDesktop ? (isLargeDesktop ? 60 : 56) : 48} 
+                color="#8E8E93" 
+                strokeWidth={1.5} 
+              />
             </View>
-            <Text style={styles.noTasksTitle}>No tasks assigned</Text>
-            <Text style={styles.noTasksSubtitle}>
+            <Text style={responsiveStyles.noTasksTitle}>No tasks assigned</Text>
+            <Text style={responsiveStyles.noTasksSubtitle}>
               Your care provider will assign tasks to help you manage your health journey.
             </Text>
-            <Text style={styles.noTasksHint}>
+            <Text style={[
+              styles.noTasksHint,
+              isWeb && isDesktop && {
+                fontSize: isLargeDesktop ? 16 : 15,
+              }
+            ]}>
               Pull down to refresh and check for new tasks.
             </Text>
           </View>
         ) : (
           <>
             {/* Progress Section */}
-            <View style={styles.progressContainer}>
+            <View style={[
+              styles.progressContainer,
+              isWeb && isDesktop && {
+                borderRadius: 20,
+                padding: isLargeDesktop ? 28 : 24,
+              }
+            ]}>
               <View style={styles.progressHeader}>
-                <Text style={styles.progressTitle}>Today's Progress</Text>
-                <Text style={styles.progressCount}>
+                <Text style={responsiveStyles.progressTitle}>Today's Progress</Text>
+                <Text style={[
+                  styles.progressCount,
+                  isWeb && isDesktop && {
+                    fontSize: isLargeDesktop ? 16 : 15,
+                  }
+                ]}>
                   {completedTasksCount} of {totalTasks} completed
                 </Text>
               </View>
               <View style={styles.progressBarContainer}>
-                <View style={styles.progressBarBackground}>
+                <View style={[
+                  styles.progressBarBackground,
+                  isWeb && isDesktop && {
+                    height: isLargeDesktop ? 12 : 10,
+                    borderRadius: isLargeDesktop ? 6 : 5,
+                  }
+                ]}>
                   <View 
                     style={[
                       styles.progressBarFill, 
-                      { width: `${progressPercentage}%` }
+                      { width: `${progressPercentage}%` },
+                      isWeb && isDesktop && {
+                        borderRadius: isLargeDesktop ? 6 : 5,
+                      }
                     ]} 
                   />
                 </View>
-                <Text style={styles.progressPercentage}>
+                <Text style={[
+                  styles.progressPercentage,
+                  isWeb && isDesktop && {
+                    fontSize: isLargeDesktop ? 16 : 15,
+                    minWidth: isLargeDesktop ? 40 : 35,
+                  }
+                ]}>
                   {Math.round(progressPercentage)}%
                 </Text>
               </View>
@@ -376,23 +582,36 @@ export default function CareCardScreen() {
                   key={task.id}
                   style={[
                     styles.taskCard,
-                    task.completed && styles.taskCardCompleted
+                    task.completed && styles.taskCardCompleted,
+                    isWeb && isDesktop && {
+                      borderRadius: 20,
+                      marginBottom: isLargeDesktop ? 16 : 14,
+                    }
                   ]}
                   onPress={() => toggleTaskCompletion(task.id)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.taskContent}>
+                  <View style={[
+                    styles.taskContent,
+                    isWeb && isDesktop && {
+                      padding: isLargeDesktop ? 28 : 24,
+                    }
+                  ]}>
                     <View style={styles.taskInfo}>
                       <Text style={[
-                        styles.taskTitle,
+                        responsiveStyles.taskTitle,
                         task.completed && styles.taskTitleCompleted
                       ]}>
                         {task.title}
                       </Text>
                       <View style={styles.timeContainer}>
-                        <Clock size={14} color="#8E8E93" strokeWidth={2} />
+                        <Clock 
+                          size={isWeb && isDesktop ? 16 : 14} 
+                          color="#8E8E93" 
+                          strokeWidth={2} 
+                        />
                         <Text style={[
-                          styles.taskTime,
+                          responsiveStyles.taskTime,
                           task.completed && styles.taskTimeCompleted
                         ]}>
                           {task.time}
@@ -401,10 +620,19 @@ export default function CareCardScreen() {
                     </View>
                     <View style={[
                       styles.checkbox,
-                      task.completed && styles.checkboxCompleted
+                      task.completed && styles.checkboxCompleted,
+                      isWeb && isDesktop && {
+                        width: isLargeDesktop ? 32 : 30,
+                        height: isLargeDesktop ? 32 : 30,
+                        borderRadius: isLargeDesktop ? 16 : 15,
+                      }
                     ]}>
                       {task.completed && (
-                        <Check size={16} color="#FFFFFF" strokeWidth={3} />
+                        <Check 
+                          size={isWeb && isDesktop ? (isLargeDesktop ? 20 : 18) : 16} 
+                          color="#FFFFFF" 
+                          strokeWidth={3} 
+                        />
                       )}
                     </View>
                   </View>
@@ -413,10 +641,20 @@ export default function CareCardScreen() {
             </View>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>
+              <Text style={[
+                styles.footerText,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 16 : 15,
+                }
+              ]}>
                 Tap any task to mark it as complete
               </Text>
-              <Text style={styles.footerSubtext}>
+              <Text style={[
+                styles.footerSubtext,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 14 : 13,
+                }
+              ]}>
                 {isOnline ? 'Changes sync automatically' : 'Changes saved locally'}
               </Text>
             </View>
