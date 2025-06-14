@@ -12,46 +12,11 @@ import {
 } from 'react-native';
 import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { v4 as uuidv4 } from 'uuid';
 import { SupabaseService, CareTask } from '@/lib/supabaseService';
 import { router } from 'expo-router';
 
 const STORAGE_KEY = '@care_tasks';
 const LAST_SYNC_KEY = '@last_sync';
-
-// Default tasks data with proper UUIDs
-const defaultTasks: CareTask[] = [
-  {
-    id: uuidv4(),
-    title: 'Take Morning Medication',
-    time: '8:00 AM',
-    completed: false,
-  },
-  {
-    id: uuidv4(),
-    title: 'Morning Exercise',
-    time: '9:00 AM',
-    completed: false,
-  },
-  {
-    id: uuidv4(),
-    title: 'Mindfulness Practice',
-    time: '6:00 PM',
-    completed: false,
-  },
-  {
-    id: uuidv4(),
-    title: 'Evening Medication',
-    time: '8:00 PM',
-    completed: false,
-  },
-  {
-    id: uuidv4(),
-    title: 'Sleep Preparation',
-    time: '10:00 PM',
-    completed: false,
-  },
-];
 
 export default function CareCardScreen() {
   const [tasks, setTasks] = useState<CareTask[]>([]);
@@ -114,31 +79,16 @@ export default function CareCardScreen() {
       
       if (Platform.OS === 'web') {
         const stored = localStorage.getItem(STORAGE_KEY);
-        storedTasks = stored ? JSON.parse(stored) : defaultTasks;
+        storedTasks = stored ? JSON.parse(stored) : [];
       } else {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        storedTasks = stored ? JSON.parse(stored) : defaultTasks;
+        storedTasks = stored ? JSON.parse(stored) : [];
       }
 
-      // Validate that all tasks have proper UUID format
-      const validTasks = storedTasks.filter(task => 
-        task.id && typeof task.id === 'string' && 
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(task.id)
-      );
-
-      // If we don't have valid tasks, use defaults
-      const tasksToUse = validTasks.length > 0 ? validTasks : defaultTasks;
-      
-      setTasks(tasksToUse);
-      
-      // Save the valid tasks back to storage
-      if (validTasks.length !== storedTasks.length) {
-        await saveLocalTasks(tasksToUse);
-      }
+      setTasks(storedTasks);
     } catch (err) {
       console.error('Error loading local tasks:', err);
-      setTasks(defaultTasks);
-      await saveLocalTasks(defaultTasks);
+      setTasks([]);
     }
   };
 
@@ -208,21 +158,9 @@ export default function CareCardScreen() {
       // Fetch tasks from Supabase
       const supabaseTasks = await SupabaseService.fetchTasks();
       
-      if (isInitialSync && supabaseTasks.length > 0) {
-        // If this is initial sync and Supabase has data, use it
-        setTasks(supabaseTasks);
-        await saveLocalTasks(supabaseTasks);
-      } else if (isInitialSync && supabaseTasks.length === 0 && tasks.length > 0) {
-        // If Supabase is empty but we have local data, sync local to Supabase
-        await SupabaseService.syncTasks(tasks);
-      } else if (!isInitialSync) {
-        // For regular syncs, merge changes intelligently
-        const mergedTasks = mergeTasks(tasks, supabaseTasks);
-        if (JSON.stringify(mergedTasks) !== JSON.stringify(tasks)) {
-          setTasks(mergedTasks);
-          await saveLocalTasks(mergedTasks);
-        }
-      }
+      // Always use Supabase as the source of truth
+      setTasks(supabaseTasks);
+      await saveLocalTasks(supabaseTasks);
 
       setIsOnline(true);
       setError(null);
@@ -236,29 +174,6 @@ export default function CareCardScreen() {
     } finally {
       setIsSyncing(false);
     }
-  };
-
-  const mergeTasks = (localTasks: CareTask[], remoteTasks: CareTask[]): CareTask[] => {
-    const taskMap = new Map<string, CareTask>();
-    
-    // Add all local tasks
-    localTasks.forEach(task => {
-      taskMap.set(task.id, task);
-    });
-    
-    // Merge with remote tasks (remote takes precedence if updated_at is newer)
-    remoteTasks.forEach(remoteTask => {
-      const localTask = taskMap.get(remoteTask.id);
-      if (!localTask || 
-          (remoteTask.updated_at && localTask.updated_at && 
-           new Date(remoteTask.updated_at) > new Date(localTask.updated_at))) {
-        taskMap.set(remoteTask.id, remoteTask);
-      }
-    });
-    
-    return Array.from(taskMap.values()).sort((a, b) => 
-      (a.created_at || '').localeCompare(b.created_at || '')
-    );
   };
 
   const toggleTaskCompletion = async (taskId: string) => {
@@ -415,78 +330,98 @@ export default function CareCardScreen() {
           </View>
         )}
 
-        <View style={styles.progressContainer}>
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressTitle}>Today's Progress</Text>
-            <Text style={styles.progressCount}>
-              {completedTasksCount} of {totalTasks} completed
-            </Text>
-          </View>
-          <View style={styles.progressBarContainer}>
-            <View style={styles.progressBarBackground}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { width: `${progressPercentage}%` }
-                ]} 
-              />
+        {/* Show "No tasks assigned" message if no tasks */}
+        {tasks.length === 0 ? (
+          <View style={styles.noTasksContainer}>
+            <View style={styles.noTasksIcon}>
+              <Heart size={48} color="#8E8E93" strokeWidth={1.5} />
             </View>
-            <Text style={styles.progressPercentage}>
-              {Math.round(progressPercentage)}%
+            <Text style={styles.noTasksTitle}>No tasks assigned</Text>
+            <Text style={styles.noTasksSubtitle}>
+              Your care provider will assign tasks to help you manage your health journey.
+            </Text>
+            <Text style={styles.noTasksHint}>
+              Pull down to refresh and check for new tasks.
             </Text>
           </View>
-        </View>
-
-        <View style={styles.tasksList}>
-          {tasks.map((task) => (
-            <TouchableOpacity
-              key={task.id}
-              style={[
-                styles.taskCard,
-                task.completed && styles.taskCardCompleted
-              ]}
-              onPress={() => toggleTaskCompletion(task.id)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.taskContent}>
-                <View style={styles.taskInfo}>
-                  <Text style={[
-                    styles.taskTitle,
-                    task.completed && styles.taskTitleCompleted
-                  ]}>
-                    {task.title}
-                  </Text>
-                  <View style={styles.timeContainer}>
-                    <Clock size={14} color="#8E8E93" strokeWidth={2} />
-                    <Text style={[
-                      styles.taskTime,
-                      task.completed && styles.taskTimeCompleted
-                    ]}>
-                      {task.time}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[
-                  styles.checkbox,
-                  task.completed && styles.checkboxCompleted
-                ]}>
-                  {task.completed && (
-                    <Check size={16} color="#FFFFFF" strokeWidth={3} />
-                  )}
-                </View>
+        ) : (
+          <>
+            {/* Progress Section */}
+            <View style={styles.progressContainer}>
+              <View style={styles.progressHeader}>
+                <Text style={styles.progressTitle}>Today's Progress</Text>
+                <Text style={styles.progressCount}>
+                  {completedTasksCount} of {totalTasks} completed
+                </Text>
               </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <View style={styles.progressBarContainer}>
+                <View style={styles.progressBarBackground}>
+                  <View 
+                    style={[
+                      styles.progressBarFill, 
+                      { width: `${progressPercentage}%` }
+                    ]} 
+                  />
+                </View>
+                <Text style={styles.progressPercentage}>
+                  {Math.round(progressPercentage)}%
+                </Text>
+              </View>
+            </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Tap any task to mark it as complete
-          </Text>
-          <Text style={styles.footerSubtext}>
-            {isOnline ? 'Changes sync automatically' : 'Changes saved locally'}
-          </Text>
-        </View>
+            {/* Tasks List */}
+            <View style={styles.tasksList}>
+              {tasks.map((task) => (
+                <TouchableOpacity
+                  key={task.id}
+                  style={[
+                    styles.taskCard,
+                    task.completed && styles.taskCardCompleted
+                  ]}
+                  onPress={() => toggleTaskCompletion(task.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.taskContent}>
+                    <View style={styles.taskInfo}>
+                      <Text style={[
+                        styles.taskTitle,
+                        task.completed && styles.taskTitleCompleted
+                      ]}>
+                        {task.title}
+                      </Text>
+                      <View style={styles.timeContainer}>
+                        <Clock size={14} color="#8E8E93" strokeWidth={2} />
+                        <Text style={[
+                          styles.taskTime,
+                          task.completed && styles.taskTimeCompleted
+                        ]}>
+                          {task.time}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[
+                      styles.checkbox,
+                      task.completed && styles.checkboxCompleted
+                    ]}>
+                      {task.completed && (
+                        <Check size={16} color="#FFFFFF" strokeWidth={3} />
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>
+                Tap any task to mark it as complete
+              </Text>
+              <Text style={styles.footerSubtext}>
+                {isOnline ? 'Changes sync automatically' : 'Changes saved locally'}
+              </Text>
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -594,6 +529,42 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
     fontWeight: '500',
+  },
+  noTasksContainer: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  noTasksIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+  },
+  noTasksTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noTasksSubtitle: {
+    fontSize: 16,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  noTasksHint: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
   progressContainer: {
     backgroundColor: '#FFFFFF',
