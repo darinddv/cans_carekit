@@ -1,13 +1,12 @@
 import { Platform } from 'react-native';
 import { CareTask, SupabaseService } from './supabaseService';
+import * as SecureStore from 'expo-secure-store';
 
 // Platform-specific imports
-let EncryptedStorage: any = null;
 let AsyncStorage: any = null;
 
 if (Platform.OS !== 'web') {
-  // Only import these on mobile platforms
-  EncryptedStorage = require('react-native-encrypted-storage').default;
+  // Only import AsyncStorage on mobile platforms
   AsyncStorage = require('@react-native-async-storage/async-storage').default;
 }
 
@@ -75,8 +74,8 @@ class MobileTaskStorage implements TaskStorage {
       // Check if old data exists in AsyncStorage
       const oldData = await AsyncStorage.getItem('@care_tasks');
       if (oldData) {
-        console.log('Migrating old data from AsyncStorage to EncryptedStorage...');
-        await EncryptedStorage.setItem(MOBILE_STORAGE_KEY, oldData);
+        console.log('Migrating old data from AsyncStorage to SecureStore...');
+        await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, oldData);
         await AsyncStorage.removeItem('@care_tasks');
         console.log('Task data migration complete.');
       }
@@ -99,10 +98,10 @@ class MobileTaskStorage implements TaskStorage {
   async getTasks(userId: string): Promise<CareTask[]> {
     try {
       await this.migrateOldData(); // Ensure migration is complete
-      const stored = await EncryptedStorage.getItem(MOBILE_STORAGE_KEY);
+      const stored = await SecureStore.getItemAsync(MOBILE_STORAGE_KEY);
       return stored ? JSON.parse(stored) : [];
     } catch (error) {
-      console.error('Error loading encrypted tasks:', error);
+      console.error('Error loading secure tasks:', error);
       return [];
     }
   }
@@ -118,26 +117,26 @@ class MobileTaskStorage implements TaskStorage {
         updatedTasks.push(task);
       }
       
-      await EncryptedStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
+      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
       
       // Trigger background sync (don't await to avoid blocking UI)
       this.syncWithServer(task.user_id || '').catch(console.error);
     } catch (error) {
-      console.error('Error saving task to encrypted storage:', error);
+      console.error('Error saving task to secure storage:', error);
       throw error;
     }
   }
 
   async saveTasks(tasksToSave: CareTask[]): Promise<void> {
     try {
-      await EncryptedStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify(tasksToSave));
+      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(tasksToSave));
       
       // Trigger background sync if we have tasks
       if (tasksToSave.length > 0) {
         this.syncWithServer(tasksToSave[0]?.user_id || '').catch(console.error);
       }
     } catch (error) {
-      console.error('Error saving tasks to encrypted storage:', error);
+      console.error('Error saving tasks to secure storage:', error);
       throw error;
     }
   }
@@ -146,12 +145,12 @@ class MobileTaskStorage implements TaskStorage {
     try {
       const currentTasks = await this.getTasks(''); // Get all tasks
       const updatedTasks = currentTasks.filter(t => t.id !== taskId);
-      await EncryptedStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
+      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
       
       // Trigger background sync
       this.syncWithServer('').catch(console.error);
     } catch (error) {
-      console.error('Error deleting task from encrypted storage:', error);
+      console.error('Error deleting task from secure storage:', error);
       throw error;
     }
   }
@@ -207,7 +206,7 @@ class MobileTaskStorage implements TaskStorage {
 
       // Pull latest from server to ensure consistency
       const latestRemoteTasks = await SupabaseService.fetchTasks();
-      await EncryptedStorage.setItem(MOBILE_STORAGE_KEY, JSON.stringify(latestRemoteTasks));
+      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(latestRemoteTasks));
       await this.saveLastSyncTime();
 
       console.log('Mobile sync completed successfully');
