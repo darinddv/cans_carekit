@@ -12,12 +12,9 @@ import {
   Dimensions
 } from 'react-native';
 import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SupabaseService, CareTask } from '@/lib/supabaseService';
+import { taskStorage } from '@/lib/taskStorage';
 import { router } from 'expo-router';
-
-const STORAGE_KEY = '@care_tasks';
-const LAST_SYNC_KEY = '@last_sync';
 
 export default function CareCardScreen() {
   const [tasks, setTasks] = useState<CareTask[]>([]);
@@ -42,12 +39,12 @@ export default function CareCardScreen() {
     initializeApp();
   }, []);
 
-  // Auto-sync every 30 seconds when online
+  // Auto-sync every 30 seconds when online (mobile only)
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || Platform.OS === 'web') return;
 
     const syncInterval = setInterval(() => {
-      syncWithSupabase(false);
+      handleBackgroundSync();
     }, 30000);
 
     return () => clearInterval(syncInterval);
@@ -58,22 +55,30 @@ export default function CareCardScreen() {
       setIsLoading(true);
       setError(null);
 
-      // Load tasks from local storage first
-      await loadLocalTasks();
-
-      // Check authentication and sync
+      // Check authentication first
       const isAuthenticated = await SupabaseService.isAuthenticated();
       if (!isAuthenticated) {
-        // If not authenticated, redirect to login
         router.replace('/login');
         return;
       }
 
-      // Initial sync with Supabase
-      await syncWithSupabase(true);
+      const user = await SupabaseService.getCurrentUser();
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+
+      // Load tasks using the abstracted storage
+      const loadedTasks = await taskStorage.getTasks(user.id);
+      setTasks(loadedTasks);
+
+      // Perform initial sync
+      await performSync(user.id, true);
       
       // Load last sync time
-      await loadLastSyncTime();
+      const lastSync = await taskStorage.getLastSyncTime?.();
+      setLastSyncTime(lastSync);
+
     } catch (err) {
       console.error('Error initializing app:', err);
       setError('Failed to initialize app. Using offline mode.');
@@ -83,75 +88,7 @@ export default function CareCardScreen() {
     }
   };
 
-  const loadLocalTasks = async () => {
-    try {
-      let storedTasks: CareTask[] = [];
-      
-      if (Platform.OS === 'web') {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        storedTasks = stored ? JSON.parse(stored) : [];
-      } else {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        storedTasks = stored ? JSON.parse(stored) : [];
-      }
-
-      setTasks(storedTasks);
-    } catch (err) {
-      console.error('Error loading local tasks:', err);
-      setTasks([]);
-    }
-  };
-
-  const saveLocalTasks = async (tasksToSave: CareTask[]) => {
-    try {
-      const tasksJson = JSON.stringify(tasksToSave);
-      
-      if (Platform.OS === 'web') {
-        localStorage.setItem(STORAGE_KEY, tasksJson);
-      } else {
-        await AsyncStorage.setItem(STORAGE_KEY, tasksJson);
-      }
-    } catch (err) {
-      console.error('Error saving local tasks:', err);
-      setError('Failed to save tasks locally.');
-    }
-  };
-
-  const loadLastSyncTime = async () => {
-    try {
-      let lastSync: string | null = null;
-      
-      if (Platform.OS === 'web') {
-        lastSync = localStorage.getItem(LAST_SYNC_KEY);
-      } else {
-        lastSync = await AsyncStorage.getItem(LAST_SYNC_KEY);
-      }
-
-      if (lastSync) {
-        setLastSyncTime(new Date(lastSync));
-      }
-    } catch (err) {
-      console.error('Error loading last sync time:', err);
-    }
-  };
-
-  const saveLastSyncTime = async () => {
-    try {
-      const now = new Date().toISOString();
-      
-      if (Platform.OS === 'web') {
-        localStorage.setItem(LAST_SYNC_KEY, now);
-      } else {
-        await AsyncStorage.setItem(LAST_SYNC_KEY, now);
-      }
-
-      setLastSyncTime(new Date(now));
-    } catch (err) {
-      console.error('Error saving last sync time:', err);
-    }
-  };
-
-  const syncWithSupabase = async (isInitialSync: boolean = false) => {
+  const performSync = async (userId: string, isInitialSync: boolean = false) => {
     try {
       if (!isInitialSync) {
         setIsSyncing(true);
@@ -165,18 +102,21 @@ export default function CareCardScreen() {
         return;
       }
 
-      // Fetch tasks from Supabase
-      const supabaseTasks = await SupabaseService.fetchTasks();
+      // Use the abstracted sync method
+      await taskStorage.syncWithServer?.(userId);
       
-      // Always use Supabase as the source of truth
-      setTasks(supabaseTasks);
-      await saveLocalTasks(supabaseTasks);
+      // Reload tasks after sync
+      const syncedTasks = await taskStorage.getTasks(userId);
+      setTasks(syncedTasks);
+
+      // Update last sync time
+      const lastSync = await taskStorage.getLastSyncTime?.();
+      setLastSyncTime(lastSync);
 
       setIsOnline(true);
       setError(null);
-      await saveLastSyncTime();
     } catch (err) {
-      console.error('Error syncing with Supabase:', err);
+      console.error('Error syncing:', err);
       setIsOnline(false);
       if (isInitialSync) {
         setError('Unable to sync with cloud. Working offline.');
@@ -186,8 +126,25 @@ export default function CareCardScreen() {
     }
   };
 
+  const handleBackgroundSync = async () => {
+    try {
+      const user = await SupabaseService.getCurrentUser();
+      if (user) {
+        await performSync(user.id, false);
+      }
+    } catch (err) {
+      console.error('Background sync failed:', err);
+    }
+  };
+
   const toggleTaskCompletion = async (taskId: string) => {
     try {
+      const user = await SupabaseService.getCurrentUser();
+      if (!user) {
+        setError('User not authenticated');
+        return;
+      }
+
       const updatedTasks = tasks.map(task =>
         task.id === taskId
           ? { 
@@ -198,38 +155,56 @@ export default function CareCardScreen() {
           : task
       );
 
-      // Update local state and storage immediately
+      // Update local state immediately for responsive UI
       setTasks(updatedTasks);
-      await saveLocalTasks(updatedTasks);
 
-      // Try to sync with Supabase in the background
-      if (isOnline) {
-        const updatedTask = updatedTasks.find(task => task.id === taskId);
-        if (updatedTask) {
-          try {
-            await SupabaseService.upsertTask(updatedTask);
-            await saveLastSyncTime();
-          } catch (err) {
-            console.error('Error syncing task update:', err);
-            setIsOnline(false);
-            // Don't show error to user, just go offline
-          }
-        }
+      // Save using the abstracted storage
+      const updatedTask = updatedTasks.find(task => task.id === taskId);
+      if (updatedTask) {
+        await taskStorage.saveTask(updatedTask);
+        
+        // Update last sync time if available
+        const lastSync = await taskStorage.getLastSyncTime?.();
+        setLastSyncTime(lastSync);
       }
+
     } catch (err) {
       console.error('Error toggling task completion:', err);
       setError('Failed to update task.');
+      
+      // Revert the optimistic update on error
+      const revertedTasks = tasks.map(task =>
+        task.id === taskId
+          ? { ...task, completed: !task.completed }
+          : task
+      );
+      setTasks(revertedTasks);
     }
   };
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await syncWithSupabase(false);
-    setIsRefreshing(false);
+    try {
+      const user = await SupabaseService.getCurrentUser();
+      if (user) {
+        await performSync(user.id, false);
+      }
+    } catch (err) {
+      console.error('Refresh failed:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, []);
 
   const handleManualSync = async () => {
-    await syncWithSupabase(false);
+    try {
+      const user = await SupabaseService.getCurrentUser();
+      if (user) {
+        await performSync(user.id, false);
+      }
+    } catch (err) {
+      console.error('Manual sync failed:', err);
+    }
   };
 
   const handleSignOut = async () => {
@@ -655,7 +630,7 @@ export default function CareCardScreen() {
                   fontSize: isLargeDesktop ? 14 : 13,
                 }
               ]}>
-                {isOnline ? 'Changes sync automatically' : 'Changes saved locally'}
+                {Platform.OS === 'web' ? 'Changes saved automatically' : (isOnline ? 'Changes sync automatically' : 'Changes saved locally')}
               </Text>
             </View>
           </>
