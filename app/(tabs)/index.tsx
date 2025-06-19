@@ -25,6 +25,7 @@ export default function CareCardScreen() {
   const [isOnline, setIsOnline] = useState(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -39,16 +40,45 @@ export default function CareCardScreen() {
     initializeApp();
   }, []);
 
+  // Real-time subscription effect
+  useEffect(() => {
+    if (!currentUserId || !isOnline) return;
+
+    console.log('Setting up real-time subscription for user:', currentUserId);
+    
+    // Subscribe to real-time changes
+    const unsubscribe = taskStorage.subscribeToChanges?.(
+      (updatedTasks: CareTask[]) => {
+        console.log('Received real-time task update:', updatedTasks.length, 'tasks');
+        setTasks(updatedTasks);
+        
+        // Update last sync time for mobile
+        if (Platform.OS !== 'web') {
+          taskStorage.getLastSyncTime?.().then(setLastSyncTime);
+        }
+      },
+      currentUserId
+    );
+
+    // Cleanup subscription on unmount or dependency change
+    return () => {
+      if (unsubscribe) {
+        console.log('Cleaning up real-time subscription');
+        unsubscribe();
+      }
+    };
+  }, [currentUserId, isOnline]);
+
   // Auto-sync every 30 seconds when online (mobile only)
   useEffect(() => {
-    if (!isOnline || Platform.OS === 'web') return;
+    if (!isOnline || Platform.OS === 'web' || !currentUserId) return;
 
     const syncInterval = setInterval(() => {
       handleBackgroundSync();
     }, 30000);
 
     return () => clearInterval(syncInterval);
-  }, [isOnline, tasks]);
+  }, [isOnline, currentUserId]);
 
   const initializeApp = async () => {
     try {
@@ -67,6 +97,8 @@ export default function CareCardScreen() {
         router.replace('/login');
         return;
       }
+
+      setCurrentUserId(user.id);
 
       // Load tasks using the abstracted storage
       const loadedTasks = await taskStorage.getTasks(user.id);
@@ -407,16 +439,18 @@ export default function CareCardScreen() {
                 fontSize: isLargeDesktop ? 16 : 15,
               }
             ]}>
-              {isOnline ? 'Online' : 'Offline'}
+              {isOnline ? (Platform.OS === 'web' ? 'Live' : 'Online') : 'Offline'}
             </Text>
-            <Text style={[
-              styles.lastSyncText,
-              isWeb && isDesktop && {
-                fontSize: isLargeDesktop ? 14 : 13,
-              }
-            ]}>
-              Last sync: {formatLastSyncTime(lastSyncTime)}
-            </Text>
+            {Platform.OS !== 'web' && (
+              <Text style={[
+                styles.lastSyncText,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 14 : 13,
+                }
+              ]}>
+                Last sync: {formatLastSyncTime(lastSyncTime)}
+              </Text>
+            )}
           </View>
           <TouchableOpacity 
             style={[
@@ -496,7 +530,7 @@ export default function CareCardScreen() {
                 fontSize: isLargeDesktop ? 16 : 15,
               }
             ]}>
-              Pull down to refresh and check for new tasks.
+              {Platform.OS === 'web' ? 'Tasks will appear here automatically when assigned.' : 'Pull down to refresh and check for new tasks.'}
             </Text>
           </View>
         ) : (
@@ -630,7 +664,7 @@ export default function CareCardScreen() {
                   fontSize: isLargeDesktop ? 14 : 13,
                 }
               ]}>
-                {Platform.OS === 'web' ? 'Changes saved automatically' : (isOnline ? 'Changes sync automatically' : 'Changes saved locally')}
+                {Platform.OS === 'web' ? 'Changes sync in real-time' : (isOnline ? 'Changes sync automatically' : 'Changes saved locally')}
               </Text>
             </View>
           </>

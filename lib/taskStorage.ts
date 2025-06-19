@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { CareTask, SupabaseService } from './supabaseService';
+import { supabase } from './supabase';
 import * as SecureStore from 'expo-secure-store';
 
 // Platform-specific imports
@@ -27,6 +28,9 @@ export interface TaskStorage {
 
   // Method for explicit sync, primarily for mobile
   syncWithServer?(userId: string): Promise<void>;
+
+  // Real-time subscription method
+  subscribeToChanges?(callback: (tasks: CareTask[]) => void, userId: string): () => void;
 }
 
 class WebTaskStorage implements TaskStorage {
@@ -58,6 +62,41 @@ class WebTaskStorage implements TaskStorage {
   
   async syncWithServer(userId: string): Promise<void> { 
     // no-op for web - all operations are already direct to server
+  }
+
+  subscribeToChanges(callback: (tasks: CareTask[]) => void, userId: string): () => void {
+    console.log('Setting up real-time subscription for web user:', userId);
+
+    const subscription = supabase
+      .channel('tasks-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `user_id=eq.${userId}`
+        },
+        async (payload) => {
+          console.log('Real-time change received on web:', payload);
+          try {
+            // Re-fetch all tasks to ensure consistency
+            const updatedTasks = await SupabaseService.fetchTasks();
+            callback(updatedTasks);
+          } catch (error) {
+            console.error('Error handling real-time update on web:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Web real-time subscription status:', status);
+      });
+
+    // Return unsubscribe function
+    return () => {
+      console.log('Unsubscribing from web real-time updates');
+      subscription.unsubscribe();
+    };
   }
 }
 
@@ -280,6 +319,44 @@ class MobileTaskStorage implements TaskStorage {
       console.error('Error syncing with server:', error);
       throw error;
     }
+  }
+
+  subscribeToChanges(callback: (tasks: CareTask[]) => void, userId: string): () => void {
+    console.log('Setting up real-time subscription for mobile user:', userId);
+
+    const subscription = supabase
+      .channel('tasks-changes-mobile')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `user_id=eq.${userId}`
+        },
+        async (payload) => {
+          console.log('Real-time change received on mobile:', payload);
+          try {
+            // For mobile, trigger a background sync to maintain local-first approach
+            await this.syncWithServer(userId);
+            
+            // After sync, get updated tasks and notify callback
+            const updatedTasks = await this.getTasks(userId);
+            callback(updatedTasks);
+          } catch (error) {
+            console.error('Error handling real-time update on mobile:', error);
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Mobile real-time subscription status:', status);
+      });
+
+    // Return unsubscribe function
+    return () => {
+      console.log('Unsubscribing from mobile real-time updates');
+      subscription.unsubscribe();
+    };
   }
 }
 
