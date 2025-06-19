@@ -10,8 +10,10 @@ if (Platform.OS !== 'web') {
   AsyncStorage = require('@react-native-async-storage/async-storage').default;
 }
 
-const MOBILE_STORAGE_KEY = '@care_tasks_encrypted';
-const MOBILE_LAST_SYNC_KEY = '@last_sync_mobile';
+// Use simple, valid keys for SecureStore (alphanumeric, dots, dashes, underscores only)
+const MOBILE_STORAGE_KEY = 'care_tasks_encrypted';
+const MOBILE_LAST_SYNC_KEY = 'last_sync_mobile';
+const MIGRATION_FLAG_KEY = 'migration_completed';
 
 export interface TaskStorage {
   getTasks(userId: string): Promise<CareTask[]>;
@@ -64,17 +66,33 @@ class MobileTaskStorage implements TaskStorage {
 
   constructor() {
     // Perform migration on first instantiation
-    this.migrateOldData().catch(console.error);
+    this.checkMigrationStatus().then(() => {
+      if (!this.migrationCompleted) {
+        this.migrateOldData().catch(console.error);
+      }
+    });
+  }
+
+  private async checkMigrationStatus() {
+    try {
+      const migrationFlag = await SecureStore.getItemAsync(MIGRATION_FLAG_KEY);
+      this.migrationCompleted = migrationFlag === 'true';
+    } catch (error) {
+      console.error('Error checking migration status:', error);
+      this.migrationCompleted = false;
+    }
   }
 
   private async migrateOldData() {
     if (this.migrationCompleted) return;
     
     try {
+      console.log('Starting data migration from AsyncStorage to SecureStore...');
+      
       // Check if old data exists in AsyncStorage
       const oldData = await AsyncStorage.getItem('@care_tasks');
       if (oldData) {
-        console.log('Migrating old data from AsyncStorage to SecureStore...');
+        console.log('Migrating task data...');
         await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, oldData);
         await AsyncStorage.removeItem('@care_tasks');
         console.log('Task data migration complete.');
@@ -83,23 +101,37 @@ class MobileTaskStorage implements TaskStorage {
       // Migrate old sync time
       const oldSyncTime = await AsyncStorage.getItem('@last_sync');
       if (oldSyncTime) {
+        console.log('Migrating sync time...');
         await AsyncStorage.setItem(MOBILE_LAST_SYNC_KEY, oldSyncTime);
         await AsyncStorage.removeItem('@last_sync');
         console.log('Sync time migration complete.');
       }
 
+      // Mark migration as completed
+      await SecureStore.setItemAsync(MIGRATION_FLAG_KEY, 'true');
       this.migrationCompleted = true;
+      console.log('Migration completed successfully.');
     } catch (error) {
       console.error('Error during data migration:', error);
-      this.migrationCompleted = true; // Don't retry migration
+      // Don't mark as completed if migration failed
     }
   }
 
   async getTasks(userId: string): Promise<CareTask[]> {
     try {
-      await this.migrateOldData(); // Ensure migration is complete
+      // Ensure migration is complete before proceeding
+      if (!this.migrationCompleted) {
+        await this.checkMigrationStatus();
+        if (!this.migrationCompleted) {
+          await this.migrateOldData();
+        }
+      }
+
       const stored = await SecureStore.getItemAsync(MOBILE_STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      const allTasks: CareTask[] = stored ? JSON.parse(stored) : [];
+      
+      // Filter tasks for the specific user
+      return allTasks.filter(task => task.user_id === userId);
     } catch (error) {
       console.error('Error loading secure tasks:', error);
       return [];
@@ -108,19 +140,24 @@ class MobileTaskStorage implements TaskStorage {
 
   async saveTask(task: CareTask): Promise<void> {
     try {
-      // Load existing tasks, update, then save back
-      const currentTasks = await this.getTasks(task.user_id || '');
-      const updatedTasks = currentTasks.map(t => t.id === task.id ? task : t);
+      // Load all existing tasks
+      const stored = await SecureStore.getItemAsync(MOBILE_STORAGE_KEY);
+      const allTasks: CareTask[] = stored ? JSON.parse(stored) : [];
       
-      // Add if new
-      if (!updatedTasks.some(t => t.id === task.id)) {
-        updatedTasks.push(task);
+      // Update or add the task
+      const existingIndex = allTasks.findIndex(t => t.id === task.id);
+      if (existingIndex >= 0) {
+        allTasks[existingIndex] = task;
+      } else {
+        allTasks.push(task);
       }
       
-      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
+      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(allTasks));
       
       // Trigger background sync (don't await to avoid blocking UI)
-      this.syncWithServer(task.user_id || '').catch(console.error);
+      if (task.user_id) {
+        this.syncWithServer(task.user_id).catch(console.error);
+      }
     } catch (error) {
       console.error('Error saving task to secure storage:', error);
       throw error;
@@ -129,12 +166,31 @@ class MobileTaskStorage implements TaskStorage {
 
   async saveTasks(tasksToSave: CareTask[]): Promise<void> {
     try {
-      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(tasksToSave));
-      
-      // Trigger background sync if we have tasks
-      if (tasksToSave.length > 0) {
-        this.syncWithServer(tasksToSave[0]?.user_id || '').catch(console.error);
+      if (tasksToSave.length === 0) {
+        await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify([]));
+        return;
       }
+
+      // Get the user ID from the first task
+      const userId = tasksToSave[0]?.user_id;
+      if (!userId) {
+        throw new Error('No user ID found in tasks');
+      }
+
+      // Load existing tasks
+      const stored = await SecureStore.getItemAsync(MOBILE_STORAGE_KEY);
+      const allTasks: CareTask[] = stored ? JSON.parse(stored) : [];
+      
+      // Remove existing tasks for this user
+      const otherUserTasks = allTasks.filter(task => task.user_id !== userId);
+      
+      // Combine with new tasks for this user
+      const updatedTasks = [...otherUserTasks, ...tasksToSave];
+      
+      await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
+      
+      // Trigger background sync
+      this.syncWithServer(userId).catch(console.error);
     } catch (error) {
       console.error('Error saving tasks to secure storage:', error);
       throw error;
@@ -143,12 +199,18 @@ class MobileTaskStorage implements TaskStorage {
 
   async deleteTask(taskId: string): Promise<void> {
     try {
-      const currentTasks = await this.getTasks(''); // Get all tasks
-      const updatedTasks = currentTasks.filter(t => t.id !== taskId);
+      const stored = await SecureStore.getItemAsync(MOBILE_STORAGE_KEY);
+      const allTasks: CareTask[] = stored ? JSON.parse(stored) : [];
+      
+      const taskToDelete = allTasks.find(t => t.id === taskId);
+      const updatedTasks = allTasks.filter(t => t.id !== taskId);
+      
       await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(updatedTasks));
       
-      // Trigger background sync
-      this.syncWithServer('').catch(console.error);
+      // Trigger background sync if we know the user ID
+      if (taskToDelete?.user_id) {
+        this.syncWithServer(taskToDelete.user_id).catch(console.error);
+      }
     } catch (error) {
       console.error('Error deleting task from secure storage:', error);
       throw error;
@@ -181,7 +243,9 @@ class MobileTaskStorage implements TaskStorage {
         throw new Error('User not authenticated');
       }
 
-      // 1. Get local tasks
+      console.log('Starting sync with server for user:', userId);
+
+      // 1. Get local tasks for this user
       const localTasks = await this.getTasks(userId);
       
       // 2. Get remote tasks
@@ -206,6 +270,8 @@ class MobileTaskStorage implements TaskStorage {
 
       // Pull latest from server to ensure consistency
       const latestRemoteTasks = await SupabaseService.fetchTasks();
+      
+      // Save all tasks (not just for this user, to maintain consistency)
       await SecureStore.setItemAsync(MOBILE_STORAGE_KEY, JSON.stringify(latestRemoteTasks));
       await this.saveLastSyncTime();
 
