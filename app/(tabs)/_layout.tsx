@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform, Dimensions } from 'react-native';
-import { Heart, Activity, ChartBar as BarChart3, Users } from 'lucide-react-native';
+import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 
 export default function TabLayout() {
@@ -82,6 +82,19 @@ export default function TabLayout() {
           title: 'Insights',
           tabBarIcon: ({ size, color }) => (
             <BarChart3 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="provider"
+        options={{
+          title: 'Provider',
+          tabBarIcon: ({ size, color }) => (
+            <Briefcase 
               size={isWeb && isDesktop ? size + 2 : size} 
               color={color} 
               strokeWidth={2} 
