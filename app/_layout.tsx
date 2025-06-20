@@ -13,59 +13,34 @@ export default function RootLayout() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-
     // Check initial session
     const checkInitialSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const authenticated = !!session;
-        
-        if (isMounted) {
-          setIsAuthenticated(authenticated);
-          setIsLoading(false);
-          
-          // Only navigate on initial load based on auth status
-          if (authenticated) {
-            router.replace('/(tabs)');
-          } else {
-            router.replace('/login');
-          }
-        }
+        setIsAuthenticated(!!session);
       } catch (error) {
         console.error('Error checking initial session:', error);
-        if (isMounted) {
-          setIsAuthenticated(false);
-          setIsLoading(false);
-          router.replace('/login');
-        }
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     checkInitialSession();
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    // Listen for auth changes, but only navigate when authentication status actually changes
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, !!session);
         
         const authenticated = !!session;
+        setIsAuthenticated(authenticated);
         
-        // Only navigate if the authentication status has actually changed
-        if (authenticated !== isAuthenticated) {
-          setIsAuthenticated(authenticated);
-          
-          if (authenticated) {
-            router.replace('/(tabs)');
-          } else {
-            router.replace('/login');
-          }
+        // Navigate based on auth state
+        if (authenticated) {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/login');
         }
       }
     );
@@ -73,7 +48,7 @@ export default function RootLayout() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [isAuthenticated]); // Depend on isAuthenticated to compare against current state
+  }, []);
 
   // Show loading screen while checking authentication
   if (isLoading) {
