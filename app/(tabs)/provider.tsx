@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform, ScrollView, TouchableOpacity } from 'react-native';
-import { Briefcase, Users, Calendar, BarChart3, MessageSquare, Shield, Clock, TrendingUp } from 'lucide-react-native';
+import { Briefcase, Users, Calendar, ChartBar as BarChart3, MessageSquare, Shield, Clock, TrendingUp } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 
 export default function ProviderScreen() {
