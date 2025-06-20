@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
-import { router, usePathname } from 'expo-router';
+import { router } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function RootLayout() {
@@ -11,37 +11,61 @@ export default function RootLayout() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const pathname = usePathname();
 
   useEffect(() => {
+    let isMounted = true;
+
     // Check initial session
     const checkInitialSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
+        const authenticated = !!session;
+        
+        if (isMounted) {
+          setIsAuthenticated(authenticated);
+          setIsLoading(false);
+          
+          // Only navigate on initial load based on auth status
+          if (authenticated) {
+            router.replace('/(tabs)');
+          } else {
+            router.replace('/login');
+          }
+        }
       } catch (error) {
         console.error('Error checking initial session:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          router.replace('/login');
+        }
       }
     };
 
     checkInitialSession();
 
-    // Listen for auth changes
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Listen for auth changes, but only navigate when authentication status actually changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, !!session);
         
         const authenticated = !!session;
-        setIsAuthenticated(authenticated);
         
-        // Only navigate on explicit sign in/out events or when on login screen
-        if (event === 'SIGNED_IN' && authenticated) {
-          router.replace('/(tabs)');
-        } else if (event === 'SIGNED_OUT' || (!authenticated && pathname !== '/login')) {
-          router.replace('/login');
+        // Only navigate if the authentication status has actually changed
+        if (authenticated !== isAuthenticated) {
+          setIsAuthenticated(authenticated);
+          
+          if (authenticated) {
+            router.replace('/(tabs)');
+          } else {
+            router.replace('/login');
+          }
         }
       }
     );
@@ -49,7 +73,7 @@ export default function RootLayout() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [pathname]);
+  }, [isAuthenticated]); // Depend on isAuthenticated to compare against current state
 
   // Show loading screen while checking authentication
   if (isLoading) {
