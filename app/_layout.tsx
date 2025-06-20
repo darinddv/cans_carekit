@@ -3,7 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
-import { router } from 'expo-router';
+import { router, usePathname } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 
 export default function RootLayout() {
@@ -11,6 +11,7 @@ export default function RootLayout() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     // Check initial session
@@ -36,10 +37,10 @@ export default function RootLayout() {
         const authenticated = !!session;
         setIsAuthenticated(authenticated);
         
-        // Navigate based on auth state
-        if (authenticated) {
+        // Only navigate on explicit sign in/out events or when on login screen
+        if (event === 'SIGNED_IN' && authenticated) {
           router.replace('/(tabs)');
-        } else {
+        } else if (event === 'SIGNED_OUT' || (!authenticated && pathname !== '/login')) {
           router.replace('/login');
         }
       }
@@ -48,7 +49,7 @@ export default function RootLayout() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [pathname]);
 
   // Show loading screen while checking authentication
   if (isLoading) {
