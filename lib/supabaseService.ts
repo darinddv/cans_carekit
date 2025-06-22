@@ -15,14 +15,42 @@ export type UserProfile = Database['public']['Tables']['users']['Row'];
 // Type for inserting new user profiles
 export type UserProfileInsert = Database['public']['Tables']['users']['Insert'];
 
+// Utility function to create a timeout promise
+function createTimeoutPromise<T>(timeoutMs: number, errorMessage: string): Promise<T> {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+  });
+}
+
+// Utility function to wrap any promise with a timeout
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  const timeoutPromise = createTimeoutPromise<T>(
+    timeoutMs, 
+    `Operation '${operation}' timed out after ${timeoutMs}ms`
+  );
+  
+  return Promise.race([promise, timeoutPromise]);
+}
+
 export class SupabaseService {
+  // Default timeout for operations (10 seconds)
+  private static readonly DEFAULT_TIMEOUT = 10000;
+
   // Sign in with email and password
   static async signInWithEmailAndPassword(email: string, password: string): Promise<void> {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const signInPromise = supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      const { error } = await withTimeout(
+        signInPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'signInWithEmailAndPassword'
+      );
 
       if (error) {
         console.error('Error signing in with email and password:', error);
@@ -37,11 +65,17 @@ export class SupabaseService {
   // Fetch user profile by user ID
   static async fetchUserProfile(userId: string): Promise<UserProfile | null> {
     try {
-      const { data, error } = await supabase
+      const fetchPromise = supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .single();
+
+      const { data, error } = await withTimeout(
+        fetchPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'fetchUserProfile'
+      );
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -70,11 +104,17 @@ export class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      const { data, error } = await supabase
+      const createPromise = supabase
         .from('users')
         .insert(profileData)
         .select()
         .single();
+
+      const { data, error } = await withTimeout(
+        createPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'createProfile'
+      );
 
       if (error) {
         console.error('Error creating user profile:', error);
@@ -91,7 +131,13 @@ export class SupabaseService {
   // Get current user profile (combines auth user + profile data)
   static async getCurrentUserProfile(): Promise<UserProfile | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Add timeout to the auth.getUser() call as well
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'getCurrentUser'
+      );
       
       if (!user) {
         return null;
@@ -109,6 +155,12 @@ export class SupabaseService {
       return profile;
     } catch (error) {
       console.error('Error getting current user profile:', error);
+      
+      // If it's a timeout error, provide more specific messaging
+      if (error instanceof Error && error.message.includes('timed out')) {
+        console.error('Profile fetching timed out - this may indicate network issues or server problems');
+      }
+      
       return null;
     }
   }
@@ -116,7 +168,7 @@ export class SupabaseService {
   // Update user profile
   static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
     try {
-      const { data, error } = await supabase
+      const updatePromise = supabase
         .from('users')
         .update({
           ...updates,
@@ -125,6 +177,12 @@ export class SupabaseService {
         .eq('id', userId)
         .select()
         .single();
+
+      const { data, error } = await withTimeout(
+        updatePromise, 
+        this.DEFAULT_TIMEOUT, 
+        'updateUserProfile'
+      );
 
       if (error) {
         console.error('Error updating user profile:', error);
@@ -141,17 +199,28 @@ export class SupabaseService {
   // Fetch all tasks for the current user
   static async fetchTasks(): Promise<CareTask[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'getCurrentUserForTasks'
+      );
       
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      const { data, error } = await supabase
+      const fetchPromise = supabase
         .from('tasks')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
+
+      const { data, error } = await withTimeout(
+        fetchPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'fetchTasks'
+      );
 
       if (error) {
         console.error('Supabase fetch error:', error);
@@ -168,7 +237,12 @@ export class SupabaseService {
   // Upsert (insert or update) a task using Supabase's native upsert
   static async upsertTask(task: CareTask): Promise<CareTask> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'getCurrentUserForUpsert'
+      );
       
       if (!user) {
         throw new Error('User not authenticated');
@@ -186,8 +260,7 @@ export class SupabaseService {
 
       console.log('Upserting task:', taskData);
 
-      // Use Supabase's native upsert functionality
-      const { data, error } = await supabase
+      const upsertPromise = supabase
         .from('tasks')
         .upsert(taskData, { 
           onConflict: 'id',
@@ -195,6 +268,12 @@ export class SupabaseService {
         })
         .select()
         .single();
+
+      const { data, error } = await withTimeout(
+        upsertPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'upsertTask'
+      );
 
       if (error) {
         console.error('Error upserting task:', error);
@@ -211,7 +290,12 @@ export class SupabaseService {
   // Sync multiple tasks to Supabase
   static async syncTasks(tasks: CareTask[]): Promise<CareTask[]> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'getCurrentUserForSync'
+      );
       
       if (!user) {
         throw new Error('User not authenticated');
@@ -229,13 +313,19 @@ export class SupabaseService {
 
       console.log('Syncing tasks:', tasksWithUserId);
 
-      const { data, error } = await supabase
+      const syncPromise = supabase
         .from('tasks')
         .upsert(tasksWithUserId, { 
           onConflict: 'id',
           ignoreDuplicates: false 
         })
         .select();
+
+      const { data, error } = await withTimeout(
+        syncPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'syncTasks'
+      );
 
       if (error) {
         console.error('Error syncing tasks:', error);
@@ -252,17 +342,28 @@ export class SupabaseService {
   // Delete a task
   static async deleteTask(taskId: string): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'getCurrentUserForDelete'
+      );
       
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      const { error } = await supabase
+      const deletePromise = supabase
         .from('tasks')
         .delete()
         .eq('id', taskId)
         .eq('user_id', user.id);
+
+      const { error } = await withTimeout(
+        deletePromise, 
+        this.DEFAULT_TIMEOUT, 
+        'deleteTask'
+      );
 
       if (error) {
         console.error('Error deleting task:', error);
@@ -277,7 +378,12 @@ export class SupabaseService {
   // Check if user is authenticated
   static async isAuthenticated(): Promise<boolean> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'isAuthenticated'
+      );
       return !!user;
     } catch (error) {
       console.error('Error checking authentication:', error);
@@ -288,7 +394,12 @@ export class SupabaseService {
   // Get current user
   static async getCurrentUser() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'getCurrentUser'
+      );
       return user;
     } catch (error) {
       console.error('Error getting current user:', error);
@@ -299,7 +410,12 @@ export class SupabaseService {
   // Sign out
   static async signOut(): Promise<void> {
     try {
-      const { error } = await supabase.auth.signOut();
+      const signOutPromise = supabase.auth.signOut();
+      const { error } = await withTimeout(
+        signOutPromise, 
+        this.DEFAULT_TIMEOUT, 
+        'signOut'
+      );
       if (error) {
         console.error('Error signing out:', error);
         throw error;
