@@ -171,7 +171,7 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <ContentWrapper 
-          style={isWeb && isDesktop ? { flex: 1 } : undefined}
+          style={{ flex: 1 }}
           contentContainerStyle={isWeb && isDesktop ? { flex: 1, justifyContent: 'center' } : undefined}
           showsVerticalScrollIndicator={false}
         >
