@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
@@ -12,14 +11,11 @@ import {
   Dimensions,
   ScrollView,
 } from 'react-native';
-import { Heart, Eye, EyeOff, Lock, Mail } from 'lucide-react-native';
+import { Heart, User, Briefcase } from 'lucide-react-native';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
@@ -32,30 +28,33 @@ export default function LoginScreen() {
     return () => subscription?.remove();
   }, []);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter both email and password');
-      return;
-    }
-
+  const handleRoleLogin = async (role: 'patient' | 'provider') => {
     setIsLoading(true);
     setError(null);
 
+    // Predefined credentials for each role
+    const credentials = {
+      patient: {
+        email: 'patient@carecard.app',
+        password: 'patient123'
+      },
+      provider: {
+        email: 'provider@carecard.app',
+        password: 'provider123'
+      }
+    };
+
+    const { email, password } = credentials[role];
+
     try {
-      await SupabaseService.signInWithEmailAndPassword(email.trim(), password);
+      await SupabaseService.signInWithEmailAndPassword(email, password);
       // Navigation will be handled by the auth state change in _layout.tsx
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid email or password. Please try again.');
+      setError(err.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleDemoLogin = async () => {
-    setEmail('demo@carecard.app');
-    setPassword('demo123');
-    setError(null);
   };
 
   const isWeb = Platform.OS === 'web';
@@ -75,7 +74,7 @@ export default function LoginScreen() {
         },
         content: {
           ...baseStyles.content,
-          maxWidth: isLargeDesktop ? 480 : 420,
+          maxWidth: isLargeDesktop ? 520 : 460,
           alignSelf: 'center',
           backgroundColor: '#FFFFFF',
           borderRadius: 24,
@@ -95,18 +94,18 @@ export default function LoginScreen() {
           ...baseStyles.subtitle,
           fontSize: isLargeDesktop ? 18 : 16,
         },
-        input: {
-          ...baseStyles.input,
-          fontSize: isLargeDesktop ? 18 : 16,
-          paddingVertical: isLargeDesktop ? 20 : 18,
+        roleButton: {
+          ...baseStyles.roleButton,
+          paddingVertical: isLargeDesktop ? 24 : 22,
+          borderRadius: 20,
         },
-        loginButtonText: {
-          ...baseStyles.loginButtonText,
+        roleButtonText: {
+          ...baseStyles.roleButtonText,
           fontSize: isLargeDesktop ? 20 : 18,
         },
-        demoButtonText: {
-          ...baseStyles.demoButtonText,
-          fontSize: isLargeDesktop ? 18 : 16,
+        roleButtonSubtext: {
+          ...baseStyles.roleButtonSubtext,
+          fontSize: isLargeDesktop ? 16 : 14,
         },
       };
     } else if (isWeb && isTablet) {
@@ -166,129 +165,169 @@ export default function LoginScreen() {
               </View>
               <Text style={responsiveStyles.title}>Care Card</Text>
               <Text style={responsiveStyles.subtitle}>
-                Sign in to access your personalized care plan
+                Choose your role to access the platform
               </Text>
             </View>
 
-            {/* Login Form */}
-            <View style={styles.form}>
-              {error && (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              )}
-
-              {/* Email Input */}
+            {/* Error Display */}
+            {error && (
               <View style={[
-                styles.inputContainer,
+                styles.errorContainer,
                 isWeb && isDesktop && {
-                  paddingVertical: isLargeDesktop ? 8 : 6,
-                  borderRadius: 20,
+                  borderRadius: 16,
+                  padding: isLargeDesktop ? 20 : 18,
                 }
               ]}>
-                <View style={styles.inputIconContainer}>
-                  <Mail 
-                    size={isWeb && isDesktop ? 22 : 20} 
-                    color="#8E8E93" 
-                    strokeWidth={2} 
-                  />
-                </View>
-                <TextInput
-                  style={responsiveStyles.input}
-                  placeholder="Email address"
-                  placeholderTextColor="#8E8E93"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                />
+                <Text style={[
+                  styles.errorText,
+                  isWeb && isDesktop && {
+                    fontSize: isLargeDesktop ? 16 : 15,
+                  }
+                ]}>{error}</Text>
               </View>
+            )}
 
-              {/* Password Input */}
-              <View style={[
-                styles.inputContainer,
-                isWeb && isDesktop && {
-                  paddingVertical: isLargeDesktop ? 8 : 6,
-                  borderRadius: 20,
-                }
-              ]}>
-                <View style={styles.inputIconContainer}>
-                  <Lock 
-                    size={isWeb && isDesktop ? 22 : 20} 
-                    color="#8E8E93" 
-                    strokeWidth={2} 
-                  />
-                </View>
-                <TextInput
-                  style={[responsiveStyles.input, styles.passwordInput]}
-                  placeholder="Password"
-                  placeholderTextColor="#8E8E93"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading}
-                />
-                <TouchableOpacity
-                  style={styles.eyeButton}
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={isLoading}
-                >
-                  {showPassword ? (
-                    <EyeOff 
-                      size={isWeb && isDesktop ? 22 : 20} 
-                      color="#8E8E93" 
-                      strokeWidth={2} 
-                    />
-                  ) : (
-                    <Eye 
-                      size={isWeb && isDesktop ? 22 : 20} 
-                      color="#8E8E93" 
-                      strokeWidth={2} 
-                    />
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* Login Button */}
+            {/* Role Selection */}
+            <View style={styles.roleSelection}>
+              {/* Patient Login Button */}
               <TouchableOpacity
                 style={[
-                  styles.loginButton, 
-                  isLoading && styles.loginButtonDisabled,
-                  isWeb && isDesktop && {
-                    paddingVertical: isLargeDesktop ? 22 : 20,
-                    borderRadius: 20,
-                  }
+                  responsiveStyles.roleButton,
+                  styles.patientButton,
+                  isLoading && styles.roleButtonDisabled
                 ]}
-                onPress={handleLogin}
+                onPress={() => handleRoleLogin('patient')}
                 disabled={isLoading}
                 activeOpacity={0.8}
               >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={responsiveStyles.loginButtonText}>Sign In</Text>
-                )}
+                <View style={styles.roleButtonContent}>
+                  <View style={[
+                    styles.roleIconContainer,
+                    styles.patientIconContainer,
+                    isWeb && isDesktop && {
+                      width: isLargeDesktop ? 64 : 60,
+                      height: isLargeDesktop ? 64 : 60,
+                      borderRadius: isLargeDesktop ? 32 : 30,
+                    }
+                  ]}>
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <User 
+                        size={isWeb && isDesktop ? (isLargeDesktop ? 32 : 30) : 28} 
+                        color="#FFFFFF" 
+                        strokeWidth={2} 
+                      />
+                    )}
+                  </View>
+                  <View style={styles.roleTextContainer}>
+                    <Text style={[responsiveStyles.roleButtonText, styles.patientButtonText]}>
+                      Login as Patient
+                    </Text>
+                    <Text style={[responsiveStyles.roleButtonSubtext, styles.patientButtonSubtext]}>
+                      Access your care plan and track progress
+                    </Text>
+                  </View>
+                </View>
               </TouchableOpacity>
 
-              {/* Demo Login Button */}
+              {/* Provider Login Button */}
               <TouchableOpacity
                 style={[
-                  styles.demoButton,
-                  isWeb && isDesktop && {
-                    paddingVertical: isLargeDesktop ? 20 : 18,
-                    borderRadius: 20,
-                  }
+                  responsiveStyles.roleButton,
+                  styles.providerButton,
+                  isLoading && styles.roleButtonDisabled
                 ]}
-                onPress={handleDemoLogin}
+                onPress={() => handleRoleLogin('provider')}
                 disabled={isLoading}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
-                <Text style={responsiveStyles.demoButtonText}>Use Demo Account</Text>
+                <View style={styles.roleButtonContent}>
+                  <View style={[
+                    styles.roleIconContainer,
+                    styles.providerIconContainer,
+                    isWeb && isDesktop && {
+                      width: isLargeDesktop ? 64 : 60,
+                      height: isLargeDesktop ? 64 : 60,
+                      borderRadius: isLargeDesktop ? 32 : 30,
+                    }
+                  ]}>
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Briefcase 
+                        size={isWeb && isDesktop ? (isLargeDesktop ? 32 : 30) : 28} 
+                        color="#FFFFFF" 
+                        strokeWidth={2} 
+                      />
+                    )}
+                  </View>
+                  <View style={styles.roleTextContainer}>
+                    <Text style={[responsiveStyles.roleButtonText, styles.providerButtonText]}>
+                      Login as Provider
+                    </Text>
+                    <Text style={[responsiveStyles.roleButtonSubtext, styles.providerButtonSubtext]}>
+                      Manage patients and care plans
+                    </Text>
+                  </View>
+                </View>
               </TouchableOpacity>
+            </View>
+
+            {/* Credentials Info */}
+            <View style={[
+              styles.credentialsInfo,
+              isWeb && isDesktop && {
+                borderRadius: 16,
+                padding: isLargeDesktop ? 24 : 20,
+              }
+            ]}>
+              <Text style={[
+                styles.credentialsTitle,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 18 : 16,
+                }
+              ]}>
+                Demo Credentials
+              </Text>
+              <View style={styles.credentialsList}>
+                <View style={styles.credentialItem}>
+                  <Text style={[
+                    styles.credentialRole,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 16 : 14,
+                    }
+                  ]}>
+                    Patient:
+                  </Text>
+                  <Text style={[
+                    styles.credentialText,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 14 : 13,
+                    }
+                  ]}>
+                    patient@carecard.app
+                  </Text>
+                </View>
+                <View style={styles.credentialItem}>
+                  <Text style={[
+                    styles.credentialRole,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 16 : 14,
+                    }
+                  ]}>
+                    Provider:
+                  </Text>
+                  <Text style={[
+                    styles.credentialText,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 14 : 13,
+                    }
+                  ]}>
+                    provider@carecard.app
+                  </Text>
+                </View>
+              </View>
             </View>
 
             {/* Footer */}
@@ -354,9 +393,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 20,
   },
-  form: {
-    marginBottom: 32,
-  },
   errorContainer: {
     backgroundColor: '#FFEBEE',
     borderRadius: 12,
@@ -371,72 +407,108 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
   },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  roleSelection: {
+    marginBottom: 32,
+  },
+  roleButton: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  inputIconContainer: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1C1C1E',
-    paddingVertical: 16,
-    fontWeight: '500',
-  },
-  passwordInput: {
-    paddingRight: 12,
-  },
-  eyeButton: {
-    padding: 8,
-  },
-  loginButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 16,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#007AFF',
-    shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
     elevation: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  loginButtonDisabled: {
-    backgroundColor: '#8E8E93',
-    shadowOpacity: 0,
+  roleButtonDisabled: {
+    opacity: 0.6,
   },
-  loginButtonText: {
+  patientButton: {
+    borderColor: '#FF69B4',
+    backgroundColor: '#FFF0F5',
+  },
+  providerButton: {
+    borderColor: '#007AFF',
+    backgroundColor: '#F0F9FF',
+  },
+  roleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  roleIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  patientIconContainer: {
+    backgroundColor: '#FF69B4',
+  },
+  providerIconContainer: {
+    backgroundColor: '#007AFF',
+  },
+  roleTextContainer: {
+    flex: 1,
+  },
+  roleButtonText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    marginBottom: 4,
   },
-  demoButton: {
-    backgroundColor: 'transparent',
-    borderRadius: 16,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 12,
-    borderWidth: 2,
-    borderColor: '#007AFF',
+  patientButtonText: {
+    color: '#FF69B4',
   },
-  demoButtonText: {
+  providerButtonText: {
+    color: '#007AFF',
+  },
+  roleButtonSubtext: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  patientButtonSubtext: {
+    color: '#C1477A',
+  },
+  providerButtonSubtext: {
+    color: '#0056CC',
+  },
+  credentialsInfo: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  credentialsTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1C1C1E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  credentialsList: {
+    gap: 8,
+  },
+  credentialItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  credentialRole: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  credentialText: {
+    fontSize: 13,
+    color: '#8E8E93',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   footer: {
     alignItems: 'center',
