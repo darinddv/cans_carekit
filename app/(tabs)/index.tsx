@@ -1,32 +1,35 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  SafeAreaView, 
-  ScrollView, 
-  TouchableOpacity, 
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView,
+  TouchableOpacity,
   ActivityIndicator,
   Platform,
-  RefreshControl,
-  Dimensions
+  Dimensions,
 } from 'react-native';
-import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, RefreshCw, LogOut } from 'lucide-react-native';
-import { SupabaseService, CareTask } from '@/lib/supabaseService';
-import { taskStorage } from '@/lib/taskStorage';
+import { 
+  User, 
+  LogOut, 
+  Settings, 
+  Shield, 
+  Heart, 
+  Briefcase,
+  Mail,
+  Calendar,
+  Clock,
+  ChevronRight
+} from 'lucide-react-native';
+import { useUser } from '@/contexts/UserContext';
+import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
-import { RoleGuard } from '@/components/RoleGuard';
 
-function CareCardContent() {
-  const [tasks, setTasks] = useState<CareTask[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(true);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+export default function ProfileScreen() {
+  const { userProfile, isLoading: userLoading, refreshProfile } = useUser();
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -36,234 +39,16 @@ function CareCardContent() {
     return () => subscription?.remove();
   }, []);
 
-  // Load tasks and initialize sync on component mount
-  useEffect(() => {
-    initializeApp();
-  }, []);
-
-  // Real-time subscription effect
-  useEffect(() => {
-    if (!currentUserId || !isOnline) return;
-
-    console.log('Setting up real-time subscription for user:', currentUserId);
-    
-    // Subscribe to real-time changes
-    const unsubscribe = taskStorage.subscribeToChanges?.(
-      (updatedTasks: CareTask[]) => {
-        console.log('Received real-time task update:', updatedTasks.length, 'tasks');
-        setTasks(updatedTasks);
-        
-        // Update last sync time for mobile
-        if (Platform.OS !== 'web') {
-          taskStorage.getLastSyncTime?.().then(setLastSyncTime);
-        }
-      },
-      currentUserId
-    );
-
-    // Cleanup subscription on unmount or dependency change
-    return () => {
-      if (unsubscribe) {
-        console.log('Cleaning up real-time subscription');
-        unsubscribe();
-      }
-    };
-  }, [currentUserId, isOnline]);
-
-  // Auto-sync every 30 seconds when online (mobile only)
-  useEffect(() => {
-    if (!isOnline || Platform.OS === 'web' || !currentUserId) return;
-
-    const syncInterval = setInterval(() => {
-      handleBackgroundSync();
-    }, 30000);
-
-    return () => clearInterval(syncInterval);
-  }, [isOnline, currentUserId]);
-
-  const initializeApp = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      // Check authentication first
-      const isAuthenticated = await SupabaseService.isAuthenticated();
-      if (!isAuthenticated) {
-        router.replace('/login');
-        return;
-      }
-
-      const user = await SupabaseService.getCurrentUser();
-      if (!user) {
-        router.replace('/login');
-        return;
-      }
-
-      setCurrentUserId(user.id);
-
-      // Load tasks using the abstracted storage
-      const loadedTasks = await taskStorage.getTasks(user.id);
-      setTasks(loadedTasks);
-
-      // Perform initial sync
-      await performSync(user.id, true);
-      
-      // Load last sync time
-      const lastSync = await taskStorage.getLastSyncTime?.();
-      setLastSyncTime(lastSync);
-
-    } catch (err) {
-      console.error('Error initializing app:', err);
-      setError('Failed to initialize app. Using offline mode.');
-      setIsOnline(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const performSync = async (userId: string, isInitialSync: boolean = false) => {
-    try {
-      if (!isInitialSync) {
-        setIsSyncing(true);
-      }
-
-      // Check if user is authenticated
-      const isAuthenticated = await SupabaseService.isAuthenticated();
-      if (!isAuthenticated) {
-        setIsOnline(false);
-        router.replace('/login');
-        return;
-      }
-
-      // Use the abstracted sync method
-      await taskStorage.syncWithServer?.(userId);
-      
-      // Reload tasks after sync
-      const syncedTasks = await taskStorage.getTasks(userId);
-      setTasks(syncedTasks);
-
-      // Update last sync time
-      const lastSync = await taskStorage.getLastSyncTime?.();
-      setLastSyncTime(lastSync);
-
-      setIsOnline(true);
-      setError(null);
-    } catch (err) {
-      console.error('Error syncing:', err);
-      setIsOnline(false);
-      if (isInitialSync) {
-        setError('Unable to sync with cloud. Working offline.');
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const handleBackgroundSync = async () => {
-    try {
-      const user = await SupabaseService.getCurrentUser();
-      if (user) {
-        await performSync(user.id, false);
-      }
-    } catch (err) {
-      console.error('Background sync failed:', err);
-    }
-  };
-
-  const toggleTaskCompletion = async (taskId: string) => {
-    try {
-      const user = await SupabaseService.getCurrentUser();
-      if (!user) {
-        setError('User not authenticated');
-        return;
-      }
-
-      const updatedTasks = tasks.map(task =>
-        task.id === taskId
-          ? { 
-              ...task, 
-              completed: !task.completed,
-              updated_at: new Date().toISOString()
-            }
-          : task
-      );
-
-      // Update local state immediately for responsive UI
-      setTasks(updatedTasks);
-
-      // Save using the abstracted storage
-      const updatedTask = updatedTasks.find(task => task.id === taskId);
-      if (updatedTask) {
-        await taskStorage.saveTask(updatedTask);
-        
-        // Update last sync time if available
-        const lastSync = await taskStorage.getLastSyncTime?.();
-        setLastSyncTime(lastSync);
-      }
-
-    } catch (err) {
-      console.error('Error toggling task completion:', err);
-      setError('Failed to update task.');
-      
-      // Revert the optimistic update on error
-      const revertedTasks = tasks.map(task =>
-        task.id === taskId
-          ? { ...task, completed: !task.completed }
-          : task
-      );
-      setTasks(revertedTasks);
-    }
-  };
-
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      const user = await SupabaseService.getCurrentUser();
-      if (user) {
-        await performSync(user.id, false);
-      }
-    } catch (err) {
-      console.error('Refresh failed:', err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  const handleManualSync = async () => {
-    try {
-      const user = await SupabaseService.getCurrentUser();
-      if (user) {
-        await performSync(user.id, false);
-      }
-    } catch (err) {
-      console.error('Manual sync failed:', err);
-    }
-  };
-
   const handleSignOut = async () => {
     try {
+      setIsSigningOut(true);
       await SupabaseService.signOut();
       // Navigation will be handled by the auth state change in _layout.tsx
     } catch (err) {
       console.error('Error signing out:', err);
-      setError('Failed to sign out. Please try again.');
+    } finally {
+      setIsSigningOut(false);
     }
-  };
-
-  const completedTasksCount = tasks.filter(task => task.completed).length;
-  const totalTasks = tasks.length;
-  const progressPercentage = totalTasks > 0 ? (completedTasksCount / totalTasks) * 100 : 0;
-
-  const formatLastSyncTime = (date: Date | null) => {
-    if (!date) return 'Never';
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString();
   };
 
   const isWeb = Platform.OS === 'web';
@@ -283,37 +68,44 @@ function CareCardContent() {
         },
         content: {
           ...baseStyles.content,
-          maxWidth: isLargeDesktop ? 1200 : 1000,
+          maxWidth: isLargeDesktop ? 1000 : 800,
           alignSelf: 'center',
           paddingHorizontal: isLargeDesktop ? 40 : 32,
           paddingTop: isLargeDesktop ? 48 : 40,
         },
-        title: {
-          ...baseStyles.title,
-          fontSize: isLargeDesktop ? 40 : 36,
+        profileCard: {
+          ...baseStyles.profileCard,
+          borderRadius: 20,
+          padding: isLargeDesktop ? 32 : 28,
         },
-        subtitle: {
-          ...baseStyles.subtitle,
+        name: {
+          ...baseStyles.name,
+          fontSize: isLargeDesktop ? 32 : 28,
+        },
+        email: {
+          ...baseStyles.email,
           fontSize: isLargeDesktop ? 18 : 16,
         },
-        progressTitle: {
-          ...baseStyles.progressTitle,
-          fontSize: isLargeDesktop ? 22 : 20,
+        roleText: {
+          ...baseStyles.roleText,
+          fontSize: isLargeDesktop ? 16 : 14,
         },
-        taskTitle: {
-          ...baseStyles.taskTitle,
-          fontSize: isLargeDesktop ? 20 : 18,
+        menuItem: {
+          ...baseStyles.menuItem,
+          borderRadius: 16,
+          padding: isLargeDesktop ? 20 : 18,
         },
-        taskTime: {
-          ...baseStyles.taskTime,
-          fontSize: isLargeDesktop ? 16 : 15,
+        menuItemText: {
+          ...baseStyles.menuItemText,
+          fontSize: isLargeDesktop ? 18 : 16,
         },
-        noTasksTitle: {
-          ...baseStyles.noTasksTitle,
-          fontSize: isLargeDesktop ? 28 : 26,
+        signOutButton: {
+          ...baseStyles.signOutButton,
+          borderRadius: 16,
+          paddingVertical: isLargeDesktop ? 18 : 16,
         },
-        noTasksSubtitle: {
-          ...baseStyles.noTasksSubtitle,
+        signOutText: {
+          ...baseStyles.signOutText,
           fontSize: isLargeDesktop ? 18 : 16,
         },
       };
@@ -322,17 +114,9 @@ function CareCardContent() {
         ...baseStyles,
         content: {
           ...baseStyles.content,
-          maxWidth: 800,
+          maxWidth: 600,
           alignSelf: 'center',
           paddingHorizontal: 32,
-        },
-        title: {
-          ...baseStyles.title,
-          fontSize: 36,
-        },
-        subtitle: {
-          ...baseStyles.subtitle,
-          fontSize: 18,
         },
       };
     }
@@ -342,347 +126,258 @@ function CareCardContent() {
 
   const responsiveStyles = getResponsiveStyles();
 
-  if (isLoading) {
+  if (userLoading) {
     return (
       <SafeAreaView style={responsiveStyles.container}>
-        <View style={[
-          styles.loadingContainer,
-          isWeb && isDesktop && {
-            maxWidth: isLargeDesktop ? 1200 : 1000,
-            alignSelf: 'center',
-          }
-        ]}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={[
-            styles.loadingText,
-            isWeb && isDesktop && {
-              fontSize: isLargeDesktop ? 18 : 16,
-            }
-          ]}>Loading your care tasks...</Text>
+          <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  const isProvider = userProfile?.role === 'provider';
+  const roleDisplayName = isProvider ? 'Healthcare Provider' : 'Patient';
+  const roleIcon = isProvider ? Briefcase : Heart;
+
+  // Quick actions based on role
+  const quickActions = isProvider 
+    ? [
+        { icon: Briefcase, title: 'Provider Dashboard', subtitle: 'Manage patients and care plans', onPress: () => router.push('/(tabs)/provider') },
+        { icon: Settings, title: 'Account Settings', subtitle: 'Manage your account preferences', onPress: () => {} },
+      ]
+    : [
+        { icon: Heart, title: 'Care Card', subtitle: 'View your daily care tasks', onPress: () => router.push('/(tabs)/care-card') },
+        { icon: Settings, title: 'Account Settings', subtitle: 'Manage your account preferences', onPress: () => {} },
+      ];
+
   return (
     <SafeAreaView style={responsiveStyles.container}>
       <ScrollView 
-        contentContainerStyle={responsiveStyles.content} 
+        contentContainerStyle={responsiveStyles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            colors={['#007AFF']}
-            tintColor="#007AFF"
-          />
-        }
       >
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerLeft}>
-              <Heart 
-                size={isWeb && isDesktop ? (isLargeDesktop ? 40 : 36) : 32} 
+        {/* Profile Header */}
+        <View style={responsiveStyles.profileCard}>
+          <View style={styles.profileHeader}>
+            <View style={[
+              styles.avatarContainer,
+              isWeb && isDesktop && {
+                width: isLargeDesktop ? 100 : 90,
+                height: isLargeDesktop ? 100 : 90,
+                borderRadius: isLargeDesktop ? 50 : 45,
+              }
+            ]}>
+              <User 
+                size={isWeb && isDesktop ? (isLargeDesktop ? 48 : 44) : 40} 
                 color="#007AFF" 
                 strokeWidth={2} 
               />
-              <Text style={responsiveStyles.title}>Care Card</Text>
             </View>
+            <View style={styles.profileInfo}>
+              <Text style={responsiveStyles.name}>
+                {userProfile?.full_name || userProfile?.username || 'User'}
+              </Text>
+              <View style={styles.emailContainer}>
+                <Mail 
+                  size={isWeb && isDesktop ? 18 : 16} 
+                  color="#8E8E93" 
+                  strokeWidth={2} 
+                />
+                <Text style={responsiveStyles.email}>{userProfile?.email}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Role Badge */}
+          <View style={[
+            styles.roleBadge,
+            { backgroundColor: isProvider ? '#F0F9FF' : '#FFF0F5' },
+            isWeb && isDesktop && {
+              borderRadius: 12,
+              paddingHorizontal: isLargeDesktop ? 20 : 18,
+              paddingVertical: isLargeDesktop ? 12 : 10,
+            }
+          ]}>
+            {React.createElement(roleIcon, {
+              size: isWeb && isDesktop ? 20 : 18,
+              color: isProvider ? '#007AFF' : '#FF69B4',
+              strokeWidth: 2,
+            })}
+            <Text style={[
+              responsiveStyles.roleText,
+              { color: isProvider ? '#007AFF' : '#FF69B4' }
+            ]}>
+              {roleDisplayName}
+            </Text>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={[
+            styles.sectionTitle,
+            isWeb && isDesktop && {
+              fontSize: isLargeDesktop ? 22 : 20,
+            }
+          ]}>
+            Quick Actions
+          </Text>
+          {quickActions.map((action, index) => (
             <TouchableOpacity
-              style={[
-                styles.signOutButton,
-                isWeb && isDesktop && {
-                  padding: 12,
-                  borderRadius: 12,
-                }
-              ]}
-              onPress={handleSignOut}
+              key={index}
+              style={responsiveStyles.menuItem}
+              onPress={action.onPress}
               activeOpacity={0.7}
             >
-              <LogOut 
-                size={isWeb && isDesktop ? 24 : 20} 
-                color="#FF3B30" 
+              <View style={styles.menuItemLeft}>
+                <View style={[
+                  styles.menuIconContainer,
+                  isWeb && isDesktop && {
+                    width: isLargeDesktop ? 48 : 44,
+                    height: isLargeDesktop ? 48 : 44,
+                    borderRadius: isLargeDesktop ? 24 : 22,
+                  }
+                ]}>
+                  <action.icon 
+                    size={isWeb && isDesktop ? (isLargeDesktop ? 24 : 22) : 20} 
+                    color="#007AFF" 
+                    strokeWidth={2} 
+                  />
+                </View>
+                <View style={styles.menuItemContent}>
+                  <Text style={responsiveStyles.menuItemText}>{action.title}</Text>
+                  <Text style={[
+                    styles.menuItemSubtitle,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 14 : 13,
+                    }
+                  ]}>
+                    {action.subtitle}
+                  </Text>
+                </View>
+              </View>
+              <ChevronRight 
+                size={isWeb && isDesktop ? 20 : 18} 
+                color="#C7C7CC" 
                 strokeWidth={2} 
               />
             </TouchableOpacity>
-          </View>
-          <Text style={responsiveStyles.subtitle}>
-            Your personalized care plan and daily tasks
+          ))}
+        </View>
+
+        {/* Account Info */}
+        <View style={styles.section}>
+          <Text style={[
+            styles.sectionTitle,
+            isWeb && isDesktop && {
+              fontSize: isLargeDesktop ? 22 : 20,
+            }
+          ]}>
+            Account Information
           </Text>
-        </View>
-
-        {/* Sync Status */}
-        <View style={[
-          styles.syncStatusContainer,
-          isWeb && isDesktop && {
-            borderRadius: 16,
-            padding: isLargeDesktop ? 20 : 18,
-          }
-        ]}>
-          <View style={styles.syncStatus}>
-            {isOnline ? (
-              <Wifi 
-                size={isWeb && isDesktop ? 18 : 16} 
-                color="#34C759" 
-                strokeWidth={2} 
-              />
-            ) : (
-              <WifiOff 
-                size={isWeb && isDesktop ? 18 : 16} 
-                color="#FF9500" 
-                strokeWidth={2} 
-              />
-            )}
-            <Text style={[
-              styles.syncStatusText,
-              { color: isOnline ? '#34C759' : '#FF9500' },
-              isWeb && isDesktop && {
-                fontSize: isLargeDesktop ? 16 : 15,
-              }
-            ]}>
-              {isOnline ? (Platform.OS === 'web' ? 'Live' : 'Online') : 'Offline'}
-            </Text>
-            {Platform.OS !== 'web' && (
-              <Text style={[
-                styles.lastSyncText,
-                isWeb && isDesktop && {
-                  fontSize: isLargeDesktop ? 14 : 13,
-                }
-              ]}>
-                Last sync: {formatLastSyncTime(lastSyncTime)}
-              </Text>
-            )}
-          </View>
-          <TouchableOpacity 
-            style={[
-              styles.syncButton,
-              isWeb && isDesktop && {
-                padding: 12,
-                borderRadius: 12,
-              }
-            ]}
-            onPress={handleManualSync}
-            disabled={isSyncing || !isOnline}
-          >
-            {isSyncing ? (
-              <ActivityIndicator size="small" color="#007AFF" />
-            ) : (
-              <RefreshCw 
-                size={isWeb && isDesktop ? 18 : 16} 
-                color={isOnline ? "#007AFF" : "#8E8E93"} 
-                strokeWidth={2} 
-              />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {error && (
           <View style={[
-            styles.errorContainer,
+            styles.infoCard,
             isWeb && isDesktop && {
               borderRadius: 16,
-              padding: isLargeDesktop ? 20 : 18,
+              padding: isLargeDesktop ? 24 : 20,
             }
           ]}>
-            <AlertCircle 
-              size={isWeb && isDesktop ? 24 : 20} 
-              color="#FF3B30" 
-              strokeWidth={2} 
-            />
-            <Text style={[
-              styles.errorText,
-              isWeb && isDesktop && {
-                fontSize: isLargeDesktop ? 16 : 15,
-              }
-            ]}>{error}</Text>
-          </View>
-        )}
-
-        {/* Show "No tasks assigned" message if no tasks */}
-        {tasks.length === 0 ? (
-          <View style={[
-            styles.noTasksContainer,
-            isWeb && isDesktop && {
-              paddingVertical: isLargeDesktop ? 80 : 70,
-              paddingHorizontal: isLargeDesktop ? 60 : 50,
-            }
-          ]}>
-            <View style={[
-              styles.noTasksIcon,
-              isWeb && isDesktop && {
-                width: isLargeDesktop ? 120 : 110,
-                height: isLargeDesktop ? 120 : 110,
-                borderRadius: isLargeDesktop ? 60 : 55,
-              }
-            ]}>
-              <Heart 
-                size={isWeb && isDesktop ? (isLargeDesktop ? 60 : 56) : 48} 
+            <View style={styles.infoRow}>
+              <Calendar 
+                size={isWeb && isDesktop ? 20 : 18} 
                 color="#8E8E93" 
-                strokeWidth={1.5} 
+                strokeWidth={2} 
               />
-            </View>
-            <Text style={responsiveStyles.noTasksTitle}>No tasks assigned</Text>
-            <Text style={responsiveStyles.noTasksSubtitle}>
-              Your care provider will assign tasks to help you manage your health journey.
-            </Text>
-            <Text style={[
-              styles.noTasksHint,
-              isWeb && isDesktop && {
-                fontSize: isLargeDesktop ? 16 : 15,
-              }
-            ]}>
-              {Platform.OS === 'web' ? 'Tasks will appear here automatically when assigned.' : 'Pull down to refresh and check for new tasks.'}
-            </Text>
-          </View>
-        ) : (
-          <>
-            {/* Progress Section */}
-            <View style={[
-              styles.progressContainer,
-              isWeb && isDesktop && {
-                borderRadius: 20,
-                padding: isLargeDesktop ? 28 : 24,
-              }
-            ]}>
-              <View style={styles.progressHeader}>
-                <Text style={responsiveStyles.progressTitle}>Today's Progress</Text>
-                <Text style={[
-                  styles.progressCount,
-                  isWeb && isDesktop && {
-                    fontSize: isLargeDesktop ? 16 : 15,
-                  }
-                ]}>
-                  {completedTasksCount} of {totalTasks} completed
-                </Text>
-              </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[
-                  styles.progressBarBackground,
-                  isWeb && isDesktop && {
-                    height: isLargeDesktop ? 12 : 10,
-                    borderRadius: isLargeDesktop ? 6 : 5,
-                  }
-                ]}>
-                  <View 
-                    style={[
-                      styles.progressBarFill, 
-                      { width: `${progressPercentage}%` },
-                      isWeb && isDesktop && {
-                        borderRadius: isLargeDesktop ? 6 : 5,
-                      }
-                    ]} 
-                  />
-                </View>
-                <Text style={[
-                  styles.progressPercentage,
-                  isWeb && isDesktop && {
-                    fontSize: isLargeDesktop ? 16 : 15,
-                    minWidth: isLargeDesktop ? 40 : 35,
-                  }
-                ]}>
-                  {Math.round(progressPercentage)}%
-                </Text>
-              </View>
-            </View>
-
-            {/* Tasks List */}
-            <View style={styles.tasksList}>
-              {tasks.map((task) => (
-                <TouchableOpacity
-                  key={task.id}
-                  style={[
-                    styles.taskCard,
-                    task.completed && styles.taskCardCompleted,
-                    isWeb && isDesktop && {
-                      borderRadius: 20,
-                      marginBottom: isLargeDesktop ? 16 : 14,
-                    }
-                  ]}
-                  onPress={() => toggleTaskCompletion(task.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[
-                    styles.taskContent,
-                    isWeb && isDesktop && {
-                      padding: isLargeDesktop ? 28 : 24,
-                    }
-                  ]}>
-                    <View style={styles.taskInfo}>
-                      <Text style={[
-                        responsiveStyles.taskTitle,
-                        task.completed && styles.taskTitleCompleted
-                      ]}>
-                        {task.title}
-                      </Text>
-                      <View style={styles.timeContainer}>
-                        <Clock 
-                          size={isWeb && isDesktop ? 16 : 14} 
-                          color="#8E8E93" 
-                          strokeWidth={2} 
-                        />
-                        <Text style={[
-                          responsiveStyles.taskTime,
-                          task.completed && styles.taskTimeCompleted
-                        ]}>
-                          {task.time}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={[
-                      styles.checkbox,
-                      task.completed && styles.checkboxCompleted,
-                      isWeb && isDesktop && {
-                        width: isLargeDesktop ? 32 : 30,
-                        height: isLargeDesktop ? 32 : 30,
-                        borderRadius: isLargeDesktop ? 16 : 15,
-                      }
-                    ]}>
-                      {task.completed && (
-                        <Check 
-                          size={isWeb && isDesktop ? (isLargeDesktop ? 20 : 18) : 16} 
-                          color="#FFFFFF" 
-                          strokeWidth={3} 
-                        />
-                      )}
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.footer}>
               <Text style={[
-                styles.footerText,
+                styles.infoLabel,
                 isWeb && isDesktop && {
                   fontSize: isLargeDesktop ? 16 : 15,
                 }
               ]}>
-                Tap any task to mark it as complete
+                Member since
               </Text>
               <Text style={[
-                styles.footerSubtext,
+                styles.infoValue,
                 isWeb && isDesktop && {
-                  fontSize: isLargeDesktop ? 14 : 13,
+                  fontSize: isLargeDesktop ? 16 : 15,
                 }
               ]}>
-                {Platform.OS === 'web' ? 'Changes sync in real-time' : (isOnline ? 'Changes sync automatically' : 'Changes saved locally')}
+                {userProfile?.created_at ? new Date(userProfile.created_at).toLocaleDateString() : 'Unknown'}
               </Text>
             </View>
-          </>
-        )}
+            <View style={styles.infoRow}>
+              <Clock 
+                size={isWeb && isDesktop ? 20 : 18} 
+                color="#8E8E93" 
+                strokeWidth={2} 
+              />
+              <Text style={[
+                styles.infoLabel,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 16 : 15,
+                }
+              ]}>
+                Last updated
+              </Text>
+              <Text style={[
+                styles.infoValue,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 16 : 15,
+                }
+              ]}>
+                {userProfile?.updated_at ? new Date(userProfile.updated_at).toLocaleDateString() : 'Unknown'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Sign Out */}
+        <TouchableOpacity
+          style={responsiveStyles.signOutButton}
+          onPress={handleSignOut}
+          disabled={isSigningOut}
+          activeOpacity={0.7}
+        >
+          {isSigningOut ? (
+            <ActivityIndicator size="small" color="#FF3B30" />
+          ) : (
+            <>
+              <LogOut 
+                size={isWeb && isDesktop ? 22 : 20} 
+                color="#FF3B30" 
+                strokeWidth={2} 
+              />
+              <Text style={responsiveStyles.signOutText}>Sign Out</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {/* Security Notice */}
+        <View style={[
+          styles.securityNotice,
+          isWeb && isDesktop && {
+            borderRadius: 12,
+            padding: isLargeDesktop ? 20 : 18,
+          }
+        ]}>
+          <Shield 
+            size={isWeb && isDesktop ? 18 : 16} 
+            color="#34C759" 
+            strokeWidth={2} 
+          />
+          <Text style={[
+            styles.securityText,
+            isWeb && isDesktop && {
+              fontSize: isLargeDesktop ? 14 : 13,
+            }
+          ]}>
+            Your data is protected with end-to-end encryption
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-export default function CareCardScreen() {
-  return (
-    <RoleGuard 
-      allowedRoles={['patient']} 
-      fallbackMessage="This section is designed for patients to manage their care tasks."
-    >
-      <CareCardContent />
-    </RoleGuard>
   );
 }
 
@@ -708,252 +403,172 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
-  header: {
+  profileCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
     marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 12,
+    elevation: 3,
   },
-  headerTop: {
+  profileHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
   },
-  headerLeft: {
-    flexDirection: 'row',
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F0F9FF',
+    justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#007AFF',
   },
-  title: {
-    fontSize: 32,
+  profileInfo: {
+    flex: 1,
+  },
+  name: {
+    fontSize: 24,
     fontWeight: '700',
     color: '#1C1C1E',
-    marginLeft: 12,
+    marginBottom: 8,
   },
-  signOutButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#FFEBEE',
+  emailContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  subtitle: {
+  email: {
     fontSize: 16,
     color: '#8E8E93',
-    lineHeight: 22,
-    marginTop: 8,
+    marginLeft: 8,
+    fontWeight: '500',
   },
-  syncStatusContainer: {
+  roleBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  roleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 8,
     elevation: 2,
   },
-  syncStatus: {
+  menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  syncStatusText: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  lastSyncText: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginLeft: 12,
-  },
-  syncButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#F2F2F7',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF3B30',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#FF3B30',
-    marginLeft: 8,
-    flex: 1,
-    fontWeight: '500',
-  },
-  noTasksContainer: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  noTasksIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#F2F2F7',
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F9FF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 2,
-    borderColor: '#E5E5EA',
-  },
-  noTasksTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  noTasksSubtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  noTasksHint: {
-    fontSize: 14,
-    color: '#8E8E93',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  progressContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  progressTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  progressCount: {
-    fontSize: 14,
-    color: '#8E8E93',
-    fontWeight: '500',
-  },
-  progressBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressBarBackground: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#E5E5EA',
-    borderRadius: 4,
-    overflow: 'hidden',
     marginRight: 12,
   },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#007AFF',
-    borderRadius: 4,
+  menuItemContent: {
+    flex: 1,
   },
-  progressPercentage: {
-    fontSize: 14,
+  menuItemText: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
-    minWidth: 35,
-    textAlign: 'right',
+    color: '#1C1C1E',
+    marginBottom: 2,
   },
-  tasksList: {
-    marginBottom: 24,
+  menuItemSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
   },
-  taskCard: {
+  infoCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 12,
+    padding: 16,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    shadowRadius: 8,
+    elevation: 2,
   },
-  taskCardCompleted: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#007AFF',
-  },
-  taskContent: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 8,
   },
-  taskInfo: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 8,
-  },
-  taskTitleCompleted: {
-    color: '#007AFF',
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  taskTime: {
-    fontSize: 15,
-    color: '#8E8E93',
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  taskTimeCompleted: {
-    color: '#007AFF',
-  },
-  checkbox: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#C7C7CC',
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxCompleted: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
-  },
-  footer: {
-    alignItems: 'center',
-    paddingTop: 16,
-  },
-  footerText: {
+  infoLabel: {
     fontSize: 14,
     color: '#8E8E93',
-    textAlign: 'center',
-    fontStyle: 'italic',
+    marginLeft: 12,
+    flex: 1,
   },
-  footerSubtext: {
+  infoValue: {
+    fontSize: 14,
+    color: '#1C1C1E',
+    fontWeight: '500',
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFEBEE',
+    borderRadius: 12,
+    paddingVertical: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  signOutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF3B30',
+    marginLeft: 8,
+  },
+  securityNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  securityText: {
     fontSize: 12,
-    color: '#8E8E93',
-    textAlign: 'center',
-    marginTop: 4,
+    color: '#15803D',
+    marginLeft: 8,
+    flex: 1,
     fontStyle: 'italic',
   },
 });

@@ -58,7 +58,7 @@ export default function TabLayout() {
     >
       {/* Profile Tab - Always visible as the default landing page */}
       <Tabs.Screen
-        name="profile"
+        name="index"
         options={{
           title: 'Profile',
           tabBarIcon: ({ size, color }) => (
@@ -73,7 +73,7 @@ export default function TabLayout() {
 
       {/* Patient Tabs - Only visible to patients */}
       <Tabs.Screen
-        name="index"
+        name="care-card"
         options={{
           title: 'Care Card',
           tabBarIcon: ({ size, color }) => (
@@ -147,6 +147,14 @@ export default function TabLayout() {
           ),
           // Hide for patients
           href: isProvider ? undefined : null,
+        }}
+      />
+
+      {/* Hide the old profile tab since index is now profile */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          href: null, // This completely hides the tab
         }}
       />
     </Tabs>
