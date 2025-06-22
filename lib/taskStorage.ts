@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { CareTask, SupabaseService } from './supabaseService';
+import { CareTask, CareTaskInsert, SupabaseService } from './supabaseService';
 import { supabase } from './supabase';
 import * as SecureStore from 'expo-secure-store';
 

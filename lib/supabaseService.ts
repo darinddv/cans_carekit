@@ -1,14 +1,13 @@
-import { supabase } from './supabase';
+import { supabase, Database } from './supabase';
 
-export interface CareTask {
-  id: string;
-  title: string;
-  time: string;
-  completed: boolean;
-  user_id?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+// Use the generated type for CareTask
+export type CareTask = Database['public']['Tables']['tasks']['Row'];
+
+// Type for inserting new tasks
+export type CareTaskInsert = Database['public']['Tables']['tasks']['Insert'];
+
+// Type for updating existing tasks
+export type CareTaskUpdate = Database['public']['Tables']['tasks']['Update'];
 
 export class SupabaseService {
   // Sign in with email and password
@@ -65,8 +64,8 @@ export class SupabaseService {
         throw new Error('User not authenticated');
       }
 
-      // Prepare task data with explicit user_id
-      const taskData = {
+      // Prepare task data for upsert - use CareTaskInsert type for better type safety
+      const taskData: CareTaskInsert = {
         id: task.id,
         title: task.title,
         time: task.time,
@@ -108,7 +107,8 @@ export class SupabaseService {
         throw new Error('User not authenticated');
       }
 
-      const tasksWithUserId = tasks.map(task => ({
+      // Prepare tasks data for upsert
+      const tasksWithUserId: CareTaskInsert[] = tasks.map(task => ({
         id: task.id,
         title: task.title,
         time: task.time,

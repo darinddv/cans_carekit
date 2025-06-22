@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import { Database } from './database.types';
 
 // Replace these with your actual Supabase project values
 const supabaseUrl = 'https://bvocjeutlfubaelywlqi.supabase.co';
@@ -26,7 +27,7 @@ const storage = Platform.OS === 'web' ? {
   },
 } : AsyncStorage;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: storage,
     autoRefreshToken: true,
@@ -35,38 +36,5 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export type Database = {
-  public: {
-    Tables: {
-      tasks: {
-        Row: {
-          id: string;
-          title: string;
-          time: string;
-          completed: boolean;
-          user_id: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          title: string;
-          time: string;
-          completed?: boolean;
-          user_id: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          title?: string;
-          time?: string;
-          completed?: boolean;
-          user_id?: string;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-    };
-  };
-};
+// Re-export the Database type for convenience
+export type { Database };
