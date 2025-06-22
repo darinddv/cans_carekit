@@ -15,8 +15,9 @@ import { Heart, Check, Clock, CircleAlert as AlertCircle, Wifi, WifiOff, Refresh
 import { SupabaseService, CareTask } from '@/lib/supabaseService';
 import { taskStorage } from '@/lib/taskStorage';
 import { router } from 'expo-router';
+import { RoleGuard } from '@/components/RoleGuard';
 
-export default function CareCardScreen() {
+function CareCardContent() {
   const [tasks, setTasks] = useState<CareTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -671,6 +672,17 @@ export default function CareCardScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export default function CareCardScreen() {
+  return (
+    <RoleGuard 
+      allowedRoles={['patient']} 
+      fallbackMessage="This section is designed for patients to manage their care tasks."
+    >
+      <CareCardContent />
+    </RoleGuard>
   );
 }
 

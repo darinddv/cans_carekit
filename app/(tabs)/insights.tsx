@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform } from 'react-native';
 import { ChartBar as BarChart3 } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
+import { RoleGuard } from '@/components/RoleGuard';
 
-export default function InsightsScreen() {
+function InsightsContent() {
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
 
   useEffect(() => {
@@ -133,6 +134,17 @@ export default function InsightsScreen() {
         )}
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function InsightsScreen() {
+  return (
+    <RoleGuard 
+      allowedRoles={['patient']} 
+      fallbackMessage="Health insights are designed for patients to track their progress."
+    >
+      <InsightsContent />
+    </RoleGuard>
   );
 }
 

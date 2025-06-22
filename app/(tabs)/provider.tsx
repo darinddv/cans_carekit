@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { Briefcase, Users, Calendar, ChartBar as BarChart3, MessageSquare, Shield, Clock, TrendingUp } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
+import { RoleGuard } from '@/components/RoleGuard';
 
-export default function ProviderScreen() {
+function ProviderContent() {
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
 
   useEffect(() => {
@@ -331,6 +332,17 @@ export default function ProviderScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+export default function ProviderScreen() {
+  return (
+    <RoleGuard 
+      allowedRoles={['provider']} 
+      fallbackMessage="The Provider Portal is exclusively for healthcare providers to manage patient care."
+    >
+      <ProviderContent />
+    </RoleGuard>
   );
 }
 

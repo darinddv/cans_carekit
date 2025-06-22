@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform } from 'react-native';
 import { Users } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
+import { RoleGuard } from '@/components/RoleGuard';
 
-export default function ConnectScreen() {
+function ConnectContent() {
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
 
   useEffect(() => {
@@ -127,6 +128,17 @@ export default function ConnectScreen() {
         )}
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function ConnectScreen() {
+  return (
+    <RoleGuard 
+      allowedRoles={['patient']} 
+      fallbackMessage="Connection features are designed for patients to share progress with their care team."
+    >
+      <ConnectContent />
+    </RoleGuard>
   );
 }
 

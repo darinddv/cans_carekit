@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform, Dimensions } from 'react-native';
-import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase } from 'lucide-react-native';
+import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase, User } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/contexts/UserContext';
 
@@ -56,6 +56,21 @@ export default function TabLayout() {
         },
       }}
     >
+      {/* Profile Tab - Always visible as the default landing page */}
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ size, color }) => (
+            <User 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
+          ),
+        }}
+      />
+
       {/* Patient Tabs - Only visible to patients */}
       <Tabs.Screen
         name="index"

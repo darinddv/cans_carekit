@@ -1,8 +1,9 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform } from 'react-native';
 import { Activity } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
+import { RoleGuard } from '@/components/RoleGuard';
 
-export default function SymptomsScreen() {
+function SymptomsContent() {
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
 
   useEffect(() => {
@@ -133,6 +134,17 @@ export default function SymptomsScreen() {
         )}
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function SymptomsScreen() {
+  return (
+    <RoleGuard 
+      allowedRoles={['patient']} 
+      fallbackMessage="Symptom tracking is designed for patients to monitor their health."
+    >
+      <SymptomsContent />
+    </RoleGuard>
   );
 }
 
