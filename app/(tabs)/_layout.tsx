@@ -94,21 +94,21 @@ export default function TabLayout() {
           ),
         }}
       />
-      {showProviderTab && (
-        <Tabs.Screen
-          name="provider"
-          options={{
-            title: 'Provider',
-            tabBarIcon: ({ size, color }) => (
-              <Briefcase 
-                size={isWeb && isDesktop ? size + 2 : size} 
-                color={color} 
-                strokeWidth={2} 
-              />
-            ),
-          }}
-        />
-      )}
+      <Tabs.Screen
+        name="provider"
+        options={{
+          title: 'Provider',
+          tabBarIcon: ({ size, color }) => (
+            <Briefcase 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
+          ),
+          // Hide the tab completely for non-provider users
+          href: showProviderTab ? undefined : null,
+        }}
+      />
       <Tabs.Screen
         name="connect"
         options={{
