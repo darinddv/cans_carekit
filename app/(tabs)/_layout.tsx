@@ -20,8 +20,9 @@ export default function TabLayout() {
   const isTablet = windowWidth >= 768;
   const isDesktop = windowWidth >= 1024;
 
-  // Show provider tab only if user has 'provider' role
-  const showProviderTab = userProfile?.role === 'provider';
+  // Determine which tabs to show based on user role
+  const isProvider = userProfile?.role === 'provider';
+  const isPatient = userProfile?.role === 'patient' || !userProfile?.role; // Default to patient if no role
 
   return (
     <Tabs
@@ -55,6 +56,7 @@ export default function TabLayout() {
         },
       }}
     >
+      {/* Patient Tabs - Only visible to patients */}
       <Tabs.Screen
         name="index"
         options={{
@@ -66,6 +68,8 @@ export default function TabLayout() {
               strokeWidth={2} 
             />
           ),
+          // Hide for providers
+          href: isPatient ? undefined : null,
         }}
       />
       <Tabs.Screen
@@ -79,6 +83,8 @@ export default function TabLayout() {
               strokeWidth={2} 
             />
           ),
+          // Hide for providers
+          href: isPatient ? undefined : null,
         }}
       />
       <Tabs.Screen
@@ -92,21 +98,8 @@ export default function TabLayout() {
               strokeWidth={2} 
             />
           ),
-        }}
-      />
-      <Tabs.Screen
-        name="provider"
-        options={{
-          title: 'Provider',
-          tabBarIcon: ({ size, color }) => (
-            <Briefcase 
-              size={isWeb && isDesktop ? size + 2 : size} 
-              color={color} 
-              strokeWidth={2} 
-            />
-          ),
-          // Hide the tab completely for non-provider users
-          href: showProviderTab ? undefined : null,
+          // Hide for providers
+          href: isPatient ? undefined : null,
         }}
       />
       <Tabs.Screen
@@ -120,6 +113,25 @@ export default function TabLayout() {
               strokeWidth={2} 
             />
           ),
+          // Hide for providers
+          href: isPatient ? undefined : null,
+        }}
+      />
+
+      {/* Provider Tab - Only visible to providers */}
+      <Tabs.Screen
+        name="provider"
+        options={{
+          title: 'Provider',
+          tabBarIcon: ({ size, color }) => (
+            <Briefcase 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
+          ),
+          // Hide for patients
+          href: isProvider ? undefined : null,
         }}
       />
     </Tabs>
