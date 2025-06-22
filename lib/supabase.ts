@@ -5,7 +5,7 @@ import { Database } from './database.types';
 
 // Replace these with your actual Supabase project values
 const supabaseUrl = 'https://rowpfjwillhwyqksbpil.supabase.co';
-const supabaseAnonKey = '7CXMTn3q66S6OkCO7ExvQm8IFB8k0XrQjq7aGOvHIvGWVjle0I+c8sfOloQNRqpfGRsisVxcFqMcILILYnmduA==';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJvd3BmandpbGxod3lxa3NicGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA1NzYxNDYsImV4cCI6MjA2NjE1MjE0Nn0.RA0vdGsW4BPKd52J4Pkab6eV0oiKYTtCDuUDsSK4lUs';
 
 // Use localStorage for web, AsyncStorage for mobile
 const storage = Platform.OS === 'web' ? {
