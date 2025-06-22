@@ -5,6 +5,7 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { UserProvider } from '@/contexts/UserContext';
 
 export default function RootLayout() {
   useFrameworkReady();
@@ -60,14 +61,14 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <UserProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />
-    </>
+    </UserProvider>
   );
 }
 

@@ -9,6 +9,12 @@ export type CareTaskInsert = Database['public']['Tables']['tasks']['Insert'];
 // Type for updating existing tasks
 export type CareTaskUpdate = Database['public']['Tables']['tasks']['Update'];
 
+// User profile type from the users table
+export type UserProfile = Database['public']['Tables']['users']['Row'];
+
+// Type for inserting new user profiles
+export type UserProfileInsert = Database['public']['Tables']['users']['Insert'];
+
 export class SupabaseService {
   // Sign in with email and password
   static async signInWithEmailAndPassword(email: string, password: string): Promise<void> {
@@ -24,6 +30,110 @@ export class SupabaseService {
       }
     } catch (error) {
       console.error('Error signing in with email and password:', error);
+      throw error;
+    }
+  }
+
+  // Fetch user profile by user ID
+  static async fetchUserProfile(userId: string): Promise<UserProfile | null> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows returned - user profile doesn't exist
+          return null;
+        }
+        console.error('Error fetching user profile:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      throw error;
+    }
+  }
+
+  // Create a new user profile
+  static async createProfile(userId: string, email: string, role: string = 'patient'): Promise<UserProfile> {
+    try {
+      const profileData: UserProfileInsert = {
+        id: userId,
+        email: email,
+        role: role,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { data, error } = await supabase
+        .from('users')
+        .insert(profileData)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating user profile:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      throw error;
+    }
+  }
+
+  // Get current user profile (combines auth user + profile data)
+  static async getCurrentUserProfile(): Promise<UserProfile | null> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return null;
+      }
+
+      // Try to fetch existing profile
+      let profile = await this.fetchUserProfile(user.id);
+
+      // If no profile exists, create one
+      if (!profile && user.email) {
+        console.log('Creating new user profile for:', user.email);
+        profile = await this.createProfile(user.id, user.email, 'patient');
+      }
+
+      return profile;
+    } catch (error) {
+      console.error('Error getting current user profile:', error);
+      return null;
+    }
+  }
+
+  // Update user profile
+  static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating user profile:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
       throw error;
     }
   }

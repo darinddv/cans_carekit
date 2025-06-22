@@ -2,9 +2,11 @@ import { Tabs } from 'expo-router';
 import { Platform, Dimensions } from 'react-native';
 import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
+import { useUser } from '@/contexts/UserContext';
 
 export default function TabLayout() {
   const [windowWidth, setWindowWidth] = useState(Dimensions.get('window').width);
+  const { userProfile, isLoading } = useUser();
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -17,6 +19,9 @@ export default function TabLayout() {
   const isWeb = Platform.OS === 'web';
   const isTablet = windowWidth >= 768;
   const isDesktop = windowWidth >= 1024;
+
+  // Show provider tab only if user has 'provider' role
+  const showProviderTab = userProfile?.role === 'provider';
 
   return (
     <Tabs
@@ -89,19 +94,21 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="provider"
-        options={{
-          title: 'Provider',
-          tabBarIcon: ({ size, color }) => (
-            <Briefcase 
-              size={isWeb && isDesktop ? size + 2 : size} 
-              color={color} 
-              strokeWidth={2} 
-            />
-          ),
-        }}
-      />
+      {showProviderTab && (
+        <Tabs.Screen
+          name="provider"
+          options={{
+            title: 'Provider',
+            tabBarIcon: ({ size, color }) => (
+              <Briefcase 
+                size={isWeb && isDesktop ? size + 2 : size} 
+                color={color} 
+                strokeWidth={2} 
+              />
+            ),
+          }}
+        />
+      )}
       <Tabs.Screen
         name="connect"
         options={{
