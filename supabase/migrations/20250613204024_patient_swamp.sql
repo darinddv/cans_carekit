@@ -23,8 +23,6 @@
     - Optimized for the care management use case
 */
 
--- Drop existing table if it exists (cleanup)
-DROP TABLE IF EXISTS care_tasks;
 
 -- Create tasks table
 CREATE TABLE IF NOT EXISTS tasks (
