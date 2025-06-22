@@ -4,8 +4,8 @@ import { Platform } from 'react-native';
 import { Database } from './database.types';
 
 // Replace these with your actual Supabase project values
-const supabaseUrl = 'https://bvocjeutlfubaelywlqi.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ2b2NqZXV0bGZ1YmFlbHl3bHFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3NzkzOTcsImV4cCI6MjA2NTM1NTM5N30.dNfoD1kpUPHHMS00mXDk36oajjB-9Uormt76y0M2xTc';
+const supabaseUrl = 'https://rowpfjwillhwyqksbpil.supabase.co';
+const supabaseAnonKey = '7CXMTn3q66S6OkCO7ExvQm8IFB8k0XrQjq7aGOvHIvGWVjle0I+c8sfOloQNRqpfGRsisVxcFqMcILILYnmduA==';
 
 // Use localStorage for web, AsyncStorage for mobile
 const storage = Platform.OS === 'web' ? {
