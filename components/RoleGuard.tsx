@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
 import { useUser } from '@/contexts/UserContext';
-import { Shield, AlertTriangle } from 'lucide-react-native';
+import { Shield, TriangleAlert as AlertTriangle } from 'lucide-react-native';
 
 interface RoleGuardProps {
   children: React.ReactNode;
