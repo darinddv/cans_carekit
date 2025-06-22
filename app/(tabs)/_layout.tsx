@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Platform, Dimensions } from 'react-native';
+import { Platform, Dimensions, View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase, User } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/contexts/UserContext';
@@ -15,6 +15,15 @@ export default function TabLayout() {
 
     return () => subscription?.remove();
   }, []);
+
+  // Show loading screen while user profile is being fetched
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
 
   const isWeb = Platform.OS === 'web';
   const isTablet = windowWidth >= 768;
@@ -160,3 +169,12 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+  },
+});
