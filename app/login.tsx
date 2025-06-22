@@ -98,7 +98,7 @@ export default function LoginScreen() {
         },
         content: {
           ...baseStyles.content,
-          maxWidth: isLargeDesktop ? 520 : 460,
+          maxWidth: isLargeDesktop ? 480 : 420,
           alignSelf: 'center',
           backgroundColor: '#FFFFFF',
           borderRadius: 24,
@@ -386,62 +386,6 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Credentials Info */}
-            <View style={[
-              styles.credentialsInfo,
-              isWeb && isDesktop && {
-                borderRadius: 16,
-                padding: isLargeDesktop ? 20 : 18,
-              }
-            ]}>
-              <Text style={[
-                styles.credentialsTitle,
-                isWeb && isDesktop && {
-                  fontSize: isLargeDesktop ? 16 : 14,
-                }
-              ]}>
-                Demo Credentials
-              </Text>
-              <View style={styles.credentialsList}>
-                <View style={styles.credentialItem}>
-                  <Text style={[
-                    styles.credentialRole,
-                    isWeb && isDesktop && {
-                      fontSize: isLargeDesktop ? 14 : 13,
-                    }
-                  ]}>
-                    Patient:
-                  </Text>
-                  <Text style={[
-                    styles.credentialText,
-                    isWeb && isDesktop && {
-                      fontSize: isLargeDesktop ? 13 : 12,
-                    }
-                  ]}>
-                    patient@carecard.app
-                  </Text>
-                </View>
-                <View style={styles.credentialItem}>
-                  <Text style={[
-                    styles.credentialRole,
-                    isWeb && isDesktop && {
-                      fontSize: isLargeDesktop ? 14 : 13,
-                    }
-                  ]}>
-                    Provider:
-                  </Text>
-                  <Text style={[
-                    styles.credentialText,
-                    isWeb && isDesktop && {
-                      fontSize: isLargeDesktop ? 13 : 12,
-                    }
-                  ]}>
-                    provider@carecard.app
-                  </Text>
-                </View>
-              </View>
-            </View>
-
             {/* Footer */}
             <View style={styles.footer}>
               <Text style={[
@@ -594,7 +538,7 @@ const styles = StyleSheet.create({
   roleButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 32,
   },
   roleButton: {
     flex: 1,
@@ -649,39 +593,6 @@ const styles = StyleSheet.create({
   },
   providerButtonText: {
     color: '#007AFF',
-  },
-  credentialsInfo: {
-    backgroundColor: '#F8F9FA',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  credentialsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  credentialsList: {
-    gap: 6,
-  },
-  credentialItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  credentialRole: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1C1C1E',
-  },
-  credentialText: {
-    fontSize: 11,
-    color: '#8E8E93',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   footer: {
     alignItems: 'center',
