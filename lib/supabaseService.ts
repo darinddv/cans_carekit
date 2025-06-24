@@ -44,8 +44,8 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: strin
 }
 
 export class SupabaseService {
-  // Default timeout for operations (10 seconds)
-  private static readonly DEFAULT_TIMEOUT = 10000;
+  // Increased timeout for operations (30 seconds to handle slow connections)
+  private static readonly DEFAULT_TIMEOUT = 30000;
 
   // Sign in with email and password
   static async signInWithEmailAndPassword(email: string, password: string): Promise<void> {
@@ -474,36 +474,48 @@ export class SupabaseService {
   // Get all patients for a specific provider
   static async getPatientsForProvider(providerId: string): Promise<UserProfile[]> {
     try {
-      const fetchPromise = supabase
+      // First get the care relationships
+      const relationshipsPromise = supabase
         .from('care_relationships')
-        .select(`
-          patient_id,
-          users!care_relationships_patient_id_fkey (
-            id,
-            email,
-            username,
-            full_name,
-            avatar_url,
-            role,
-            created_at,
-            updated_at
-          )
-        `)
+        .select('patient_id')
         .eq('provider_id', providerId);
 
-      const { data, error } = await withTimeout(
-        fetchPromise,
+      const { data: relationships, error: relationshipsError } = await withTimeout(
+        relationshipsPromise,
         this.DEFAULT_TIMEOUT,
-        'getPatientsForProvider'
+        'getPatientsRelationships'
       );
 
-      if (error) {
-        console.error('Error fetching patients for provider:', error);
-        throw error;
+      if (relationshipsError) {
+        console.error('Error fetching patient relationships:', relationshipsError);
+        throw relationshipsError;
       }
 
-      // Extract the user profiles from the joined data
-      return data?.map(relationship => relationship.users).filter(Boolean) || [];
+      if (!relationships || relationships.length === 0) {
+        return [];
+      }
+
+      // Extract patient IDs
+      const patientIds = relationships.map(rel => rel.patient_id);
+
+      // Then get the user profiles for those patient IDs
+      const patientsPromise = supabase
+        .from('users')
+        .select('*')
+        .in('id', patientIds);
+
+      const { data: patients, error: patientsError } = await withTimeout(
+        patientsPromise,
+        this.DEFAULT_TIMEOUT,
+        'getPatientsProfiles'
+      );
+
+      if (patientsError) {
+        console.error('Error fetching patient profiles:', patientsError);
+        throw patientsError;
+      }
+
+      return patients || [];
     } catch (error) {
       console.error('Error fetching patients for provider:', error);
       throw error;
@@ -513,36 +525,48 @@ export class SupabaseService {
   // Get all providers for a specific patient
   static async getProvidersForPatient(patientId: string): Promise<UserProfile[]> {
     try {
-      const fetchPromise = supabase
+      // First get the care relationships
+      const relationshipsPromise = supabase
         .from('care_relationships')
-        .select(`
-          provider_id,
-          users!care_relationships_provider_id_fkey (
-            id,
-            email,
-            username,
-            full_name,
-            avatar_url,
-            role,
-            created_at,
-            updated_at
-          )
-        `)
+        .select('provider_id')
         .eq('patient_id', patientId);
 
-      const { data, error } = await withTimeout(
-        fetchPromise,
+      const { data: relationships, error: relationshipsError } = await withTimeout(
+        relationshipsPromise,
         this.DEFAULT_TIMEOUT,
-        'getProvidersForPatient'
+        'getProvidersRelationships'
       );
 
-      if (error) {
-        console.error('Error fetching providers for patient:', error);
-        throw error;
+      if (relationshipsError) {
+        console.error('Error fetching provider relationships:', relationshipsError);
+        throw relationshipsError;
       }
 
-      // Extract the user profiles from the joined data
-      return data?.map(relationship => relationship.users).filter(Boolean) || [];
+      if (!relationships || relationships.length === 0) {
+        return [];
+      }
+
+      // Extract provider IDs
+      const providerIds = relationships.map(rel => rel.provider_id);
+
+      // Then get the user profiles for those provider IDs
+      const providersPromise = supabase
+        .from('users')
+        .select('*')
+        .in('id', providerIds);
+
+      const { data: providers, error: providersError } = await withTimeout(
+        providersPromise,
+        this.DEFAULT_TIMEOUT,
+        'getProvidersProfiles'
+      );
+
+      if (providersError) {
+        console.error('Error fetching provider profiles:', providersError);
+        throw providersError;
+      }
+
+      return providers || [];
     } catch (error) {
       console.error('Error fetching providers for patient:', error);
       throw error;
@@ -627,37 +651,49 @@ export class SupabaseService {
   // Fetch all tasks for patients under a provider's care
   static async fetchTasksForProvider(providerId: string): Promise<CareTask[]> {
     try {
-      const fetchPromise = supabase
+      // First get patient IDs for this provider
+      const relationshipsPromise = supabase
+        .from('care_relationships')
+        .select('patient_id')
+        .eq('provider_id', providerId);
+
+      const { data: relationships, error: relationshipsError } = await withTimeout(
+        relationshipsPromise,
+        this.DEFAULT_TIMEOUT,
+        'getPatientRelationshipsForTasks'
+      );
+
+      if (relationshipsError) {
+        console.error('Error fetching patient relationships for tasks:', relationshipsError);
+        throw relationshipsError;
+      }
+
+      if (!relationships || relationships.length === 0) {
+        return [];
+      }
+
+      // Extract patient IDs
+      const patientIds = relationships.map(rel => rel.patient_id);
+
+      // Then get tasks for those patients
+      const tasksPromise = supabase
         .from('tasks')
-        .select(`
-          *,
-          users!tasks_user_id_fkey (
-            id,
-            email,
-            username,
-            full_name
-          )
-        `)
-        .in('user_id', 
-          supabase
-            .from('care_relationships')
-            .select('patient_id')
-            .eq('provider_id', providerId)
-        )
+        .select('*')
+        .in('user_id', patientIds)
         .order('created_at', { ascending: true });
 
-      const { data, error } = await withTimeout(
-        fetchPromise,
+      const { data: tasks, error: tasksError } = await withTimeout(
+        tasksPromise,
         this.DEFAULT_TIMEOUT,
         'fetchTasksForProvider'
       );
 
-      if (error) {
-        console.error('Error fetching tasks for provider:', error);
-        throw error;
+      if (tasksError) {
+        console.error('Error fetching tasks for provider:', tasksError);
+        throw tasksError;
       }
 
-      return data || [];
+      return tasks || [];
     } catch (error) {
       console.error('Error fetching tasks for provider:', error);
       throw error;
