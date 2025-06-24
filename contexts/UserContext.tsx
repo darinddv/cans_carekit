@@ -28,18 +28,17 @@ export function UserProvider({ children }: UserProviderProps) {
   // Clear error function
   const clearError = () => setError(null);
 
-  // Load user profile with comprehensive error handling
-  const loadUserProfile = async (retryCount = 0): Promise<void> => {
-    const maxRetries = 3;
-    const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Exponential backoff, max 5s
-
+  // Load user profile with comprehensive error handling and detailed logging
+  const loadUserProfile = async (): Promise<void> => {
     try {
-      console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
+      console.log('=== LOADING USER PROFILE ===');
       setIsLoading(true);
       setError(null);
 
       // Check if user is authenticated first
+      console.log('Step 1: Checking authentication...');
       const isAuth = await SupabaseService.isAuthenticated();
+      console.log('Authentication result:', isAuth);
       setIsAuthenticated(isAuth);
 
       if (!isAuth) {
@@ -50,10 +49,16 @@ export function UserProvider({ children }: UserProviderProps) {
       }
 
       // Get user profile
+      console.log('Step 2: Getting user profile...');
       const profile = await SupabaseService.getCurrentUserProfile();
       
       if (profile) {
-        console.log('User profile loaded successfully:', profile.email);
+        console.log('User profile loaded successfully:', {
+          id: profile.id,
+          email: profile.email,
+          role: profile.role,
+          created_at: profile.created_at
+        });
         setUserProfile(profile);
         setError(null);
       } else {
@@ -63,7 +68,16 @@ export function UserProvider({ children }: UserProviderProps) {
       }
 
     } catch (err: any) {
-      console.error(`Error loading user profile (attempt ${retryCount + 1}):`, err);
+      console.error('=== ERROR LOADING USER PROFILE ===');
+      console.error('Error type:', typeof err);
+      console.error('Error name:', err.name);
+      console.error('Error message:', err.message);
+      console.error('Error status:', err.status);
+      console.error('Error code:', err.code);
+      console.error('Error details:', err.details);
+      console.error('Error hint:', err.hint);
+      console.error('Full error object:', err);
+      console.error('Error stack:', err.stack);
       
       // Handle specific error types
       if (err.message?.includes('Auth session missing') || err.name === 'AuthSessionMissingError') {
@@ -71,29 +85,15 @@ export function UserProvider({ children }: UserProviderProps) {
         setIsAuthenticated(false);
         setUserProfile(null);
         setError(null); // Don't treat this as an error
-      } else if (err.message?.includes('timed out') && retryCount < maxRetries) {
-        // Retry on timeout
-        console.log(`Retrying after ${retryDelay}ms...`);
-        setTimeout(() => {
-          loadUserProfile(retryCount + 1);
-        }, retryDelay);
-        return; // Don't set loading to false yet
       } else {
         // Set error for other types of failures
         const errorMessage = err.message || 'Failed to load user profile';
+        console.error('Setting error state:', errorMessage);
         setError(errorMessage);
         setUserProfile(null);
-        
-        // On web, be more lenient with errors to avoid blocking the UI
-        if (Platform.OS === 'web' && retryCount < maxRetries) {
-          console.log(`Web platform: retrying after ${retryDelay}ms...`);
-          setTimeout(() => {
-            loadUserProfile(retryCount + 1);
-          }, retryDelay);
-          return;
-        }
       }
     } finally {
+      console.log('=== FINISHED LOADING USER PROFILE ===');
       setIsLoading(false);
       if (!isInitialized) {
         setIsInitialized(true);
@@ -103,6 +103,7 @@ export function UserProvider({ children }: UserProviderProps) {
 
   // Refresh profile function
   const refreshProfile = async () => {
+    console.log('=== REFRESH PROFILE REQUESTED ===');
     await loadUserProfile();
   };
 
@@ -113,40 +114,35 @@ export function UserProvider({ children }: UserProviderProps) {
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing authentication...');
+        console.log('=== INITIALIZING AUTHENTICATION ===');
         
-        // Check initial session with timeout
-        const sessionCheckPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session check timeout')), 10000);
-        });
+        // Check initial session without timeout to see raw errors
+        console.log('Getting initial session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-        try {
-          const { data: { session }, error } = await Promise.race([
-            sessionCheckPromise,
-            timeoutPromise
-          ]) as any;
-
-          if (mounted) {
-            if (error) {
-              console.error('Error getting initial session:', error);
-              setIsAuthenticated(false);
-              setUserProfile(null);
-            } else if (session) {
-              console.log('Initial session found, loading profile...');
-              setIsAuthenticated(true);
-              await loadUserProfile();
-            } else {
-              console.log('No initial session found');
-              setIsAuthenticated(false);
-              setUserProfile(null);
-              setIsLoading(false);
-              setIsInitialized(true);
-            }
-          }
-        } catch (sessionError) {
-          console.warn('Session check failed or timed out:', sessionError);
-          if (mounted) {
+        if (mounted) {
+          if (error) {
+            console.error('=== INITIAL SESSION ERROR ===');
+            console.error('Error type:', typeof error);
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error status:', error.status);
+            console.error('Full error object:', error);
+            setIsAuthenticated(false);
+            setUserProfile(null);
+            setError(`Session error: ${error.message}`);
+          } else if (session) {
+            console.log('Initial session found:', {
+              user_id: session.user?.id,
+              email: session.user?.email,
+              expires_at: session.expires_at,
+              access_token: session.access_token ? 'present' : 'missing',
+              refresh_token: session.refresh_token ? 'present' : 'missing'
+            });
+            setIsAuthenticated(true);
+            await loadUserProfile();
+          } else {
+            console.log('No initial session found');
             setIsAuthenticated(false);
             setUserProfile(null);
             setIsLoading(false);
@@ -155,11 +151,21 @@ export function UserProvider({ children }: UserProviderProps) {
         }
 
         // Set up auth state change listener
+        console.log('Setting up auth state change listener...');
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
             if (!mounted) return;
 
-            console.log('Auth state changed:', event, !!session);
+            console.log('=== AUTH STATE CHANGE ===');
+            console.log('Event:', event);
+            console.log('Session present:', !!session);
+            if (session) {
+              console.log('Session details:', {
+                user_id: session.user?.id,
+                email: session.user?.email,
+                expires_at: session.expires_at
+              });
+            }
             
             try {
               switch (event) {
@@ -203,9 +209,10 @@ export function UserProvider({ children }: UserProviderProps) {
                   break;
               }
             } catch (authError) {
+              console.error('=== AUTH STATE CHANGE ERROR ===');
               console.error('Error handling auth state change:', authError);
               if (mounted) {
-                setError('Authentication error occurred');
+                setError(`Authentication error: ${authError}`);
               }
             }
           }
@@ -214,9 +221,13 @@ export function UserProvider({ children }: UserProviderProps) {
         authSubscription = subscription;
 
       } catch (initError) {
-        console.error('Error initializing auth:', initError);
+        console.error('=== INITIALIZATION ERROR ===');
+        console.error('Error type:', typeof initError);
+        console.error('Error name:', (initError as any).name);
+        console.error('Error message:', (initError as any).message);
+        console.error('Full error object:', initError);
         if (mounted) {
-          setError('Failed to initialize authentication');
+          setError(`Failed to initialize authentication: ${initError}`);
           setIsLoading(false);
           setIsInitialized(true);
         }
@@ -241,7 +252,8 @@ export function UserProvider({ children }: UserProviderProps) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isAuthenticated && !userProfile && !isLoading) {
-        console.log('Page became visible, checking auth state...');
+        console.log('=== PAGE BECAME VISIBLE ===');
+        console.log('Checking auth state after visibility change...');
         // Small delay to avoid race conditions
         setTimeout(() => {
           refreshProfile();

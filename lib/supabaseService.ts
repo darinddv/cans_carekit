@@ -24,49 +24,30 @@ export type CareRelationshipInsert = Database['public']['Tables']['care_relation
 // Type for updating existing care relationships
 export type CareRelationshipUpdate = Database['public']['Tables']['care_relationships']['Update'];
 
-// Utility function to create a timeout promise
-function createTimeoutPromise<T>(timeoutMs: number, errorMessage: string): Promise<T> {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error(errorMessage));
-    }, timeoutMs);
-  });
-}
-
-// Utility function to wrap any promise with a timeout
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
-  const timeoutPromise = createTimeoutPromise<T>(
-    timeoutMs, 
-    `Operation '${operation}' timed out after ${timeoutMs}ms`
-  );
-  
-  return Promise.race([promise, timeoutPromise]);
-}
-
 export class SupabaseService {
-  // Increased timeout for operations (30 seconds to handle slow connections)
-  private static readonly DEFAULT_TIMEOUT = 10000;
-
   // Sign in with email and password
   static async signInWithEmailAndPassword(email: string, password: string): Promise<void> {
     try {
-      const signInPromise = supabase.auth.signInWithPassword({
+      console.log('Attempting sign in for:', email);
+      
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      const { error } = await withTimeout(
-        signInPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'signInWithEmailAndPassword'
-      );
-
       if (error) {
-        console.error('Error signing in with email and password:', error);
+        console.error('Sign in error details:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+          stack: error.stack
+        });
         throw error;
       }
+      
+      console.log('Sign in successful');
     } catch (error) {
-      console.error('Error signing in with email and password:', error);
+      console.error('Sign in exception:', error);
       throw error;
     }
   }
@@ -74,30 +55,32 @@ export class SupabaseService {
   // Fetch user profile by user ID
   static async fetchUserProfile(userId: string): Promise<UserProfile | null> {
     try {
-      const fetchPromise = supabase
+      console.log('Fetching user profile for ID:', userId);
+      
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', userId)
         .single();
 
-      const { data, error } = await withTimeout(
-        fetchPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'fetchUserProfile'
-      );
-
       if (error) {
         if (error.code === 'PGRST116') {
-          // No rows returned - user profile doesn't exist
+          console.log('No user profile found for ID:', userId);
           return null;
         }
-        console.error('Error fetching user profile:', error);
+        console.error('Fetch user profile error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('User profile fetched successfully:', data?.email);
       return data;
     } catch (error) {
-      console.error('Error fetching user profile:', error);
+      console.error('Fetch user profile exception:', error);
       throw error;
     }
   }
@@ -105,6 +88,8 @@ export class SupabaseService {
   // Create a new user profile
   static async createProfile(userId: string, email: string, role: string = 'patient'): Promise<UserProfile> {
     try {
+      console.log('Creating profile for user:', { userId, email, role });
+      
       const profileData: UserProfileInsert = {
         id: userId,
         email: email,
@@ -113,26 +98,26 @@ export class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      const createPromise = supabase
+      const { data, error } = await supabase
         .from('users')
         .insert(profileData)
         .select()
         .single();
 
-      const { data, error } = await withTimeout(
-        createPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'createProfile'
-      );
-
       if (error) {
-        console.error('Error creating user profile:', error);
+        console.error('Create profile error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Profile created successfully:', data?.email);
       return data;
     } catch (error) {
-      console.error('Error creating user profile:', error);
+      console.error('Create profile exception:', error);
       throw error;
     }
   }
@@ -140,17 +125,25 @@ export class SupabaseService {
   // Get current user profile (combines auth user + profile data)
   static async getCurrentUserProfile(): Promise<UserProfile | null> {
     try {
-      // Add timeout to the auth.getUser() call as well
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'getCurrentUser'
-      );
+      console.log('Getting current user profile...');
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Get user error details:', {
+          message: userError.message,
+          name: userError.name,
+          status: userError.status
+        });
+        throw userError;
+      }
       
       if (!user) {
+        console.log('No authenticated user found');
         return null;
       }
+
+      console.log('Authenticated user found:', user.email, 'ID:', user.id);
 
       // Try to fetch existing profile
       let profile = await this.fetchUserProfile(user.id);
@@ -163,21 +156,17 @@ export class SupabaseService {
 
       return profile;
     } catch (error) {
-      console.error('Error getting current user profile:', error);
-      
-      // If it's a timeout error, provide more specific messaging
-      if (error instanceof Error && error.message.includes('timed out')) {
-        console.error('Profile fetching timed out - this may indicate network issues or server problems');
-      }
-      
-      return null;
+      console.error('Get current user profile exception:', error);
+      throw error;
     }
   }
 
   // Update user profile
   static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile> {
     try {
-      const updatePromise = supabase
+      console.log('Updating user profile:', userId, updates);
+      
+      const { data, error } = await supabase
         .from('users')
         .update({
           ...updates,
@@ -187,20 +176,20 @@ export class SupabaseService {
         .select()
         .single();
 
-      const { data, error } = await withTimeout(
-        updatePromise, 
-        this.DEFAULT_TIMEOUT, 
-        'updateUserProfile'
-      );
-
       if (error) {
-        console.error('Error updating user profile:', error);
+        console.error('Update user profile error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('User profile updated successfully');
       return data;
     } catch (error) {
-      console.error('Error updating user profile:', error);
+      console.error('Update user profile exception:', error);
       throw error;
     }
   }
@@ -208,37 +197,45 @@ export class SupabaseService {
   // Fetch all tasks for the current user
   static async fetchTasks(): Promise<CareTask[]> {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'getCurrentUserForTasks'
-      );
+      console.log('Fetching tasks for current user...');
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Get user for tasks error details:', {
+          message: userError.message,
+          name: userError.name,
+          status: userError.status
+        });
+        throw userError;
+      }
       
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      const fetchPromise = supabase
+      console.log('Fetching tasks for user ID:', user.id);
+
+      const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
-      const { data, error } = await withTimeout(
-        fetchPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'fetchTasks'
-      );
-
       if (error) {
-        console.error('Supabase fetch error:', error);
+        console.error('Fetch tasks error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Tasks fetched successfully, count:', data?.length || 0);
       return data || [];
     } catch (error) {
-      console.error('Error fetching tasks from Supabase:', error);
+      console.error('Fetch tasks exception:', error);
       throw error;
     }
   }
@@ -246,12 +243,18 @@ export class SupabaseService {
   // Upsert (insert or update) a task using Supabase's native upsert
   static async upsertTask(task: CareTask): Promise<CareTask> {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'getCurrentUserForUpsert'
-      );
+      console.log('Upserting task:', task.id, task.title);
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Get user for upsert error details:', {
+          message: userError.message,
+          name: userError.name,
+          status: userError.status
+        });
+        throw userError;
+      }
       
       if (!user) {
         throw new Error('User not authenticated');
@@ -267,9 +270,7 @@ export class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      console.log('Upserting task:', taskData);
-
-      const upsertPromise = supabase
+      const { data, error } = await supabase
         .from('tasks')
         .upsert(taskData, { 
           onConflict: 'id',
@@ -278,20 +279,20 @@ export class SupabaseService {
         .select()
         .single();
 
-      const { data, error } = await withTimeout(
-        upsertPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'upsertTask'
-      );
-
       if (error) {
-        console.error('Error upserting task:', error);
+        console.error('Upsert task error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Task upserted successfully');
       return data;
     } catch (error) {
-      console.error('Error upserting task to Supabase:', error);
+      console.error('Upsert task exception:', error);
       throw error;
     }
   }
@@ -299,12 +300,18 @@ export class SupabaseService {
   // Sync multiple tasks to Supabase
   static async syncTasks(tasks: CareTask[]): Promise<CareTask[]> {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'getCurrentUserForSync'
-      );
+      console.log('Syncing tasks, count:', tasks.length);
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Get user for sync error details:', {
+          message: userError.message,
+          name: userError.name,
+          status: userError.status
+        });
+        throw userError;
+      }
       
       if (!user) {
         throw new Error('User not authenticated');
@@ -320,9 +327,7 @@ export class SupabaseService {
         updated_at: new Date().toISOString(),
       }));
 
-      console.log('Syncing tasks:', tasksWithUserId);
-
-      const syncPromise = supabase
+      const { data, error } = await supabase
         .from('tasks')
         .upsert(tasksWithUserId, { 
           onConflict: 'id',
@@ -330,20 +335,20 @@ export class SupabaseService {
         })
         .select();
 
-      const { data, error } = await withTimeout(
-        syncPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'syncTasks'
-      );
-
       if (error) {
-        console.error('Error syncing tasks:', error);
+        console.error('Sync tasks error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Tasks synced successfully, count:', data?.length || 0);
       return data || [];
     } catch (error) {
-      console.error('Error syncing tasks to Supabase:', error);
+      console.error('Sync tasks exception:', error);
       throw error;
     }
   }
@@ -351,35 +356,42 @@ export class SupabaseService {
   // Delete a task
   static async deleteTask(taskId: string): Promise<void> {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'getCurrentUserForDelete'
-      );
+      console.log('Deleting task:', taskId);
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error('Get user for delete error details:', {
+          message: userError.message,
+          name: userError.name,
+          status: userError.status
+        });
+        throw userError;
+      }
       
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      const deletePromise = supabase
+      const { error } = await supabase
         .from('tasks')
         .delete()
         .eq('id', taskId)
         .eq('user_id', user.id);
 
-      const { error } = await withTimeout(
-        deletePromise, 
-        this.DEFAULT_TIMEOUT, 
-        'deleteTask'
-      );
-
       if (error) {
-        console.error('Error deleting task:', error);
+        console.error('Delete task error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
+
+      console.log('Task deleted successfully');
     } catch (error) {
-      console.error('Error deleting task from Supabase:', error);
+      console.error('Delete task exception:', error);
       throw error;
     }
   }
@@ -387,15 +399,31 @@ export class SupabaseService {
   // Check if user is authenticated
   static async isAuthenticated(): Promise<boolean> {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'isAuthenticated'
-      );
-      return !!user;
+      console.log('Checking authentication status...');
+      
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('Authentication check error details:', {
+          message: error.message,
+          name: error.name,
+          status: error.status
+        });
+        
+        // Don't throw on auth session missing - just return false
+        if (error.message?.includes('Auth session missing') || error.name === 'AuthSessionMissingError') {
+          console.log('Auth session missing - user not authenticated');
+          return false;
+        }
+        
+        throw error;
+      }
+      
+      const isAuth = !!user;
+      console.log('Authentication status:', isAuth, user?.email || 'no user');
+      return isAuth;
     } catch (error) {
-      console.error('Error checking authentication:', error);
+      console.error('Authentication check exception:', error);
       return false;
     }
   }
@@ -403,15 +431,30 @@ export class SupabaseService {
   // Get current user
   static async getCurrentUser() {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'getCurrentUser'
-      );
+      console.log('Getting current user...');
+      
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('Get current user error details:', {
+          message: error.message,
+          name: error.name,
+          status: error.status
+        });
+        
+        // Don't throw on auth session missing - just return null
+        if (error.message?.includes('Auth session missing') || error.name === 'AuthSessionMissingError') {
+          console.log('Auth session missing - no current user');
+          return null;
+        }
+        
+        throw error;
+      }
+      
+      console.log('Current user:', user?.email || 'no user', 'ID:', user?.id || 'no ID');
       return user;
     } catch (error) {
-      console.error('Error getting current user:', error);
+      console.error('Get current user exception:', error);
       return null;
     }
   }
@@ -419,25 +462,28 @@ export class SupabaseService {
   // Sign out - with graceful handling of AuthSessionMissingError
   static async signOut(): Promise<void> {
     try {
-      const signOutPromise = supabase.auth.signOut();
-      const { error } = await withTimeout(
-        signOutPromise, 
-        this.DEFAULT_TIMEOUT, 
-        'signOut'
-      );
+      console.log('Attempting to sign out...');
+      
+      const { error } = await supabase.auth.signOut();
       
       if (error) {
+        console.error('Sign out error details:', {
+          message: error.message,
+          name: error.name,
+          status: error.status
+        });
+        
         // Check if this is an AuthSessionMissingError
         if (error.message?.includes('Auth session missing') || error.name === 'AuthSessionMissingError') {
           // This is expected when the session is already invalid
-          // Log it as a warning but don't throw - let the auth state change handle navigation
           console.warn('Auth session was already missing during sign out - user is effectively signed out');
           return;
         }
         
-        console.error('Error signing out:', error);
         throw error;
       }
+      
+      console.log('Sign out successful');
     } catch (error) {
       // Handle the case where the error is thrown directly (not in the response)
       if (error instanceof Error && (
@@ -448,7 +494,7 @@ export class SupabaseService {
         return;
       }
       
-      console.error('Error signing out:', error);
+      console.error('Sign out exception:', error);
       throw error;
     }
   }
@@ -458,6 +504,8 @@ export class SupabaseService {
   // Add a patient to a provider's care list
   static async addPatientToProvider(providerId: string, patientId: string): Promise<CareRelationship> {
     try {
+      console.log('Adding patient to provider:', { providerId, patientId });
+      
       const relationshipData: CareRelationshipInsert = {
         provider_id: providerId,
         patient_id: patientId,
@@ -465,26 +513,26 @@ export class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      const insertPromise = supabase
+      const { data, error } = await supabase
         .from('care_relationships')
         .insert(relationshipData)
         .select()
         .single();
 
-      const { data, error } = await withTimeout(
-        insertPromise,
-        this.DEFAULT_TIMEOUT,
-        'addPatientToProvider'
-      );
-
       if (error) {
-        console.error('Error adding patient to provider:', error);
+        console.error('Add patient to provider error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Patient added to provider successfully');
       return data;
     } catch (error) {
-      console.error('Error adding patient to provider:', error);
+      console.error('Add patient to provider exception:', error);
       throw error;
     }
   }
@@ -492,50 +540,53 @@ export class SupabaseService {
   // Get all patients for a specific provider
   static async getPatientsForProvider(providerId: string): Promise<UserProfile[]> {
     try {
+      console.log('Getting patients for provider:', providerId);
+      
       // First get the care relationships
-      const relationshipsPromise = supabase
+      const { data: relationships, error: relationshipsError } = await supabase
         .from('care_relationships')
         .select('patient_id')
         .eq('provider_id', providerId);
 
-      const { data: relationships, error: relationshipsError } = await withTimeout(
-        relationshipsPromise,
-        this.DEFAULT_TIMEOUT,
-        'getPatientsRelationships'
-      );
-
       if (relationshipsError) {
-        console.error('Error fetching patient relationships:', relationshipsError);
+        console.error('Get patient relationships error details:', {
+          message: relationshipsError.message,
+          code: relationshipsError.code,
+          details: relationshipsError.details,
+          hint: relationshipsError.hint
+        });
         throw relationshipsError;
       }
 
       if (!relationships || relationships.length === 0) {
+        console.log('No patient relationships found for provider');
         return [];
       }
 
       // Extract patient IDs
       const patientIds = relationships.map(rel => rel.patient_id);
+      console.log('Found patient IDs:', patientIds);
 
       // Then get the user profiles for those patient IDs
-      const patientsPromise = supabase
+      const { data: patients, error: patientsError } = await supabase
         .from('users')
         .select('*')
         .in('id', patientIds);
 
-      const { data: patients, error: patientsError } = await withTimeout(
-        patientsPromise,
-        this.DEFAULT_TIMEOUT,
-        'getPatientsProfiles'
-      );
-
       if (patientsError) {
-        console.error('Error fetching patient profiles:', patientsError);
+        console.error('Get patient profiles error details:', {
+          message: patientsError.message,
+          code: patientsError.code,
+          details: patientsError.details,
+          hint: patientsError.hint
+        });
         throw patientsError;
       }
 
+      console.log('Patients fetched successfully, count:', patients?.length || 0);
       return patients || [];
     } catch (error) {
-      console.error('Error fetching patients for provider:', error);
+      console.error('Get patients for provider exception:', error);
       throw error;
     }
   }
@@ -543,50 +594,53 @@ export class SupabaseService {
   // Get all providers for a specific patient
   static async getProvidersForPatient(patientId: string): Promise<UserProfile[]> {
     try {
+      console.log('Getting providers for patient:', patientId);
+      
       // First get the care relationships
-      const relationshipsPromise = supabase
+      const { data: relationships, error: relationshipsError } = await supabase
         .from('care_relationships')
         .select('provider_id')
         .eq('patient_id', patientId);
 
-      const { data: relationships, error: relationshipsError } = await withTimeout(
-        relationshipsPromise,
-        this.DEFAULT_TIMEOUT,
-        'getProvidersRelationships'
-      );
-
       if (relationshipsError) {
-        console.error('Error fetching provider relationships:', relationshipsError);
+        console.error('Get provider relationships error details:', {
+          message: relationshipsError.message,
+          code: relationshipsError.code,
+          details: relationshipsError.details,
+          hint: relationshipsError.hint
+        });
         throw relationshipsError;
       }
 
       if (!relationships || relationships.length === 0) {
+        console.log('No provider relationships found for patient');
         return [];
       }
 
       // Extract provider IDs
       const providerIds = relationships.map(rel => rel.provider_id);
+      console.log('Found provider IDs:', providerIds);
 
       // Then get the user profiles for those provider IDs
-      const providersPromise = supabase
+      const { data: providers, error: providersError } = await supabase
         .from('users')
         .select('*')
         .in('id', providerIds);
 
-      const { data: providers, error: providersError } = await withTimeout(
-        providersPromise,
-        this.DEFAULT_TIMEOUT,
-        'getProvidersProfiles'
-      );
-
       if (providersError) {
-        console.error('Error fetching provider profiles:', providersError);
+        console.error('Get provider profiles error details:', {
+          message: providersError.message,
+          code: providersError.code,
+          details: providersError.details,
+          hint: providersError.hint
+        });
         throw providersError;
       }
 
+      console.log('Providers fetched successfully, count:', providers?.length || 0);
       return providers || [];
     } catch (error) {
-      console.error('Error fetching providers for patient:', error);
+      console.error('Get providers for patient exception:', error);
       throw error;
     }
   }
@@ -594,24 +648,27 @@ export class SupabaseService {
   // Remove a patient from a provider's care list
   static async removePatientFromProvider(providerId: string, patientId: string): Promise<void> {
     try {
-      const deletePromise = supabase
+      console.log('Removing patient from provider:', { providerId, patientId });
+      
+      const { error } = await supabase
         .from('care_relationships')
         .delete()
         .eq('provider_id', providerId)
         .eq('patient_id', patientId);
 
-      const { error } = await withTimeout(
-        deletePromise,
-        this.DEFAULT_TIMEOUT,
-        'removePatientFromProvider'
-      );
-
       if (error) {
-        console.error('Error removing patient from provider:', error);
+        console.error('Remove patient from provider error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
+
+      console.log('Patient removed from provider successfully');
     } catch (error) {
-      console.error('Error removing patient from provider:', error);
+      console.error('Remove patient from provider exception:', error);
       throw error;
     }
   }
@@ -622,12 +679,18 @@ export class SupabaseService {
     taskData: Omit<CareTaskInsert, 'user_id'>
   ): Promise<CareTask> {
     try {
-      const getUserPromise = supabase.auth.getUser();
-      const { data: { user } } = await withTimeout(
-        getUserPromise,
-        this.DEFAULT_TIMEOUT,
-        'getCurrentUserForCreateTask'
-      );
+      console.log('Creating task for patient:', patientId, taskData.title);
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error('Get user for create task error details:', {
+          message: userError.message,
+          name: userError.name,
+          status: userError.status
+        });
+        throw userError;
+      }
 
       if (!user) {
         throw new Error('User not authenticated');
@@ -640,28 +703,26 @@ export class SupabaseService {
         updated_at: new Date().toISOString(),
       };
 
-      console.log('Creating task for patient:', taskDataWithUserId);
-
-      const insertPromise = supabase
+      const { data, error } = await supabase
         .from('tasks')
         .insert(taskDataWithUserId)
         .select()
         .single();
 
-      const { data, error } = await withTimeout(
-        insertPromise,
-        this.DEFAULT_TIMEOUT,
-        'createTaskForPatient'
-      );
-
       if (error) {
-        console.error('Error creating task for patient:', error);
+        console.error('Create task for patient error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Task created for patient successfully');
       return data;
     } catch (error) {
-      console.error('Error creating task for patient:', error);
+      console.error('Create task for patient exception:', error);
       throw error;
     }
   }
@@ -669,51 +730,54 @@ export class SupabaseService {
   // Fetch all tasks for patients under a provider's care
   static async fetchTasksForProvider(providerId: string): Promise<CareTask[]> {
     try {
+      console.log('Fetching tasks for provider:', providerId);
+      
       // First get patient IDs for this provider
-      const relationshipsPromise = supabase
+      const { data: relationships, error: relationshipsError } = await supabase
         .from('care_relationships')
         .select('patient_id')
         .eq('provider_id', providerId);
 
-      const { data: relationships, error: relationshipsError } = await withTimeout(
-        relationshipsPromise,
-        this.DEFAULT_TIMEOUT,
-        'getPatientRelationshipsForTasks'
-      );
-
       if (relationshipsError) {
-        console.error('Error fetching patient relationships for tasks:', relationshipsError);
+        console.error('Get patient relationships for tasks error details:', {
+          message: relationshipsError.message,
+          code: relationshipsError.code,
+          details: relationshipsError.details,
+          hint: relationshipsError.hint
+        });
         throw relationshipsError;
       }
 
       if (!relationships || relationships.length === 0) {
+        console.log('No patient relationships found for provider tasks');
         return [];
       }
 
       // Extract patient IDs
       const patientIds = relationships.map(rel => rel.patient_id);
+      console.log('Fetching tasks for patient IDs:', patientIds);
 
       // Then get tasks for those patients
-      const tasksPromise = supabase
+      const { data: tasks, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
         .in('user_id', patientIds)
         .order('created_at', { ascending: true });
 
-      const { data: tasks, error: tasksError } = await withTimeout(
-        tasksPromise,
-        this.DEFAULT_TIMEOUT,
-        'fetchTasksForProvider'
-      );
-
       if (tasksError) {
-        console.error('Error fetching tasks for provider:', tasksError);
+        console.error('Fetch tasks for provider error details:', {
+          message: tasksError.message,
+          code: tasksError.code,
+          details: tasksError.details,
+          hint: tasksError.hint
+        });
         throw tasksError;
       }
 
+      console.log('Tasks fetched for provider successfully, count:', tasks?.length || 0);
       return tasks || [];
     } catch (error) {
-      console.error('Error fetching tasks for provider:', error);
+      console.error('Fetch tasks for provider exception:', error);
       throw error;
     }
   }
@@ -721,27 +785,29 @@ export class SupabaseService {
   // Search for users by email (for providers to find patients)
   static async searchUsersByEmail(email: string): Promise<UserProfile[]> {
     try {
-      const searchPromise = supabase
+      console.log('Searching users by email:', email);
+      
+      const { data, error } = await supabase
         .from('users')
         .select('*')
         .ilike('email', `%${email}%`)
         .eq('role', 'patient')
         .limit(10);
 
-      const { data, error } = await withTimeout(
-        searchPromise,
-        this.DEFAULT_TIMEOUT,
-        'searchUsersByEmail'
-      );
-
       if (error) {
-        console.error('Error searching users by email:', error);
+        console.error('Search users by email error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         throw error;
       }
 
+      console.log('Users search completed, count:', data?.length || 0);
       return data || [];
     } catch (error) {
-      console.error('Error searching users by email:', error);
+      console.error('Search users by email exception:', error);
       throw error;
     }
   }
