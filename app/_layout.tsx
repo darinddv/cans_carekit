@@ -2,71 +2,95 @@ import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
-import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { UserProvider } from '@/contexts/UserContext';
+import { View, ActivityIndicator, StyleSheet, Text, Platform } from 'react-native';
+import { UserProvider, useUser } from '@/contexts/UserContext';
 
-export default function RootLayout() {
-  useFrameworkReady();
-  
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+// Main app content that uses the UserContext
+function AppContent() {
+  const { userProfile, isLoading, isAuthenticated, error } = useUser();
+  const [hasNavigated, setHasNavigated] = useState(false);
 
   useEffect(() => {
-    // Check initial session
-    const checkInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setIsAuthenticated(!!session);
-      } catch (error) {
-        console.error('Error checking initial session:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
+    // Don't navigate until we're done loading and haven't navigated yet
+    if (isLoading || hasNavigated) return;
+
+    console.log('Navigation decision:', { isAuthenticated, hasProfile: !!userProfile, error });
+
+    try {
+      if (isAuthenticated && userProfile) {
+        console.log('Navigating to tabs - user authenticated with profile');
+        router.replace('/(tabs)');
+        setHasNavigated(true);
+      } else if (!isAuthenticated) {
+        console.log('Navigating to login - user not authenticated');
+        router.replace('/login');
+        setHasNavigated(true);
+      } else if (isAuthenticated && !userProfile && !error) {
+        // User is authenticated but no profile - this might be a new user
+        // Stay on current screen and let the UserContext handle profile creation
+        console.log('User authenticated but no profile found - waiting...');
+      } else if (error) {
+        console.log('Navigation with error state - going to login');
+        router.replace('/login');
+        setHasNavigated(true);
       }
-    };
+    } catch (navError) {
+      console.error('Navigation error:', navError);
+      // Fallback to login on navigation errors
+      router.replace('/login');
+      setHasNavigated(true);
+    }
+  }, [isLoading, isAuthenticated, userProfile, error, hasNavigated]);
 
-    checkInitialSession();
+  // Reset navigation flag when auth state changes significantly
+  useEffect(() => {
+    setHasNavigated(false);
+  }, [isAuthenticated]);
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event, !!session);
-        
-        const authenticated = !!session;
-        setIsAuthenticated(authenticated);
-        
-        // Navigate based on auth state
-        if (authenticated) {
-          router.replace('/(tabs)');
-        } else {
-          router.replace('/login');
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Show loading screen while checking authentication
+  // Show loading screen while determining auth state
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Loading...</Text>
+        {Platform.OS === 'web' && (
+          <Text style={styles.loadingSubtext}>
+            Checking authentication status
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  // Show error state if there's a persistent error
+  if (error && !isAuthenticated) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Connection Error</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorSubtext}>
+          Please check your internet connection and try again.
+        </Text>
       </View>
     );
   }
 
   return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="+not-found" />
+    </Stack>
+  );
+}
+
+export default function RootLayout() {
+  useFrameworkReady();
+
+  return (
     <UserProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
+      <AppContent />
       <StatusBar style="auto" />
     </UserProvider>
   );
@@ -78,5 +102,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F2F2F7',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    color: '#8E8E93',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FF3B30',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    marginBottom: 12,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { 
   User, 
@@ -20,15 +21,18 @@ import {
   Mail,
   Calendar,
   Clock,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react-native';
 import { useUser } from '@/contexts/UserContext';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
 
 export default function ProfileScreen() {
-  const { userProfile, isLoading: userLoading, refreshProfile } = useUser();
+  const { userProfile, isLoading: userLoading, refreshProfile, error, clearError } = useUser();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
 
   useEffect(() => {
@@ -43,11 +47,27 @@ export default function ProfileScreen() {
     try {
       setIsSigningOut(true);
       await SupabaseService.signOut();
-      // Navigation will be handled by the auth state change in _layout.tsx
-    } catch (err) {
+      // Navigation will be handled by the auth state change in UserContext
+    } catch (err: any) {
       console.error('Error signing out:', err);
+      // Don't show error for auth session missing - it's expected
+      if (!err.message?.includes('Auth session missing')) {
+        // Could show a toast or error message here
+      }
     } finally {
       setIsSigningOut(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      clearError();
+      await refreshProfile();
+    } catch (err) {
+      console.error('Error refreshing profile:', err);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -157,7 +177,26 @@ export default function ProfileScreen() {
       <ScrollView 
         contentContainerStyle={responsiveStyles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#007AFF']}
+            tintColor="#007AFF"
+          />
+        }
       >
+        {/* Error Banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <AlertCircle size={20} color="#FF3B30" strokeWidth={2} />
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+              <RefreshCw size={16} color="#007AFF" strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Profile Header */}
         <View style={responsiveStyles.profileCard}>
           <View style={styles.profileHeader}>
@@ -402,6 +441,28 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 16,
     textAlign: 'center',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF3B30',
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  retryButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#F0F9FF',
   },
   profileCard: {
     backgroundColor: '#FFFFFF',
