@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform, ScrollView, TouchableOpacity } from 'react-native';
-import { Briefcase, Users, Calendar, ChartBar as BarChart3, MessageSquare, Shield, Clock, TrendingUp } from 'lucide-react-native';
+import { Briefcase, Users, Calendar, ChartBar as BarChart3, MessageSquare, Shield, Clock, TrendingUp, UserPlus, Plus } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { RoleGuard } from '@/components/RoleGuard';
+import { router } from 'expo-router';
 
 function ProviderContent() {
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
@@ -74,6 +75,19 @@ function ProviderContent() {
           ...baseStyles.statsLabel,
           fontSize: isLargeDesktop ? 16 : 14,
         },
+        quickActionCard: {
+          ...baseStyles.quickActionCard,
+          borderRadius: 20,
+          padding: isLargeDesktop ? 24 : 20,
+        },
+        quickActionTitle: {
+          ...baseStyles.quickActionTitle,
+          fontSize: isLargeDesktop ? 18 : 16,
+        },
+        quickActionDescription: {
+          ...baseStyles.quickActionDescription,
+          fontSize: isLargeDesktop ? 14 : 13,
+        },
       };
     } else if (isWeb && isTablet) {
       return {
@@ -138,6 +152,25 @@ function ProviderContent() {
     { number: '12', label: 'Pending Reviews', color: '#FF3B30' },
   ];
 
+  const quickActions = [
+    {
+      icon: UserPlus,
+      title: 'Manage Patients',
+      description: 'Add new patients and create care tasks',
+      color: '#007AFF',
+      bgColor: '#F0F9FF',
+      onPress: () => router.push('/(tabs)/provider/manage-patients'),
+    },
+    {
+      icon: Plus,
+      title: 'Quick Task',
+      description: 'Create a task for existing patients',
+      color: '#34C759',
+      bgColor: '#F0FDF4',
+      onPress: () => router.push('/(tabs)/provider/manage-patients'),
+    },
+  ];
+
   return (
     <SafeAreaView style={responsiveStyles.container}>
       <ScrollView 
@@ -165,6 +198,55 @@ function ProviderContent() {
           <Text style={responsiveStyles.subtitle}>
             Comprehensive care management platform for healthcare providers
           </Text>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActionsSection}>
+          <Text style={responsiveStyles.sectionTitle}>Quick Actions</Text>
+          <View style={[
+            styles.quickActionsGrid,
+            isWeb && isDesktop && {
+              flexDirection: 'row',
+              gap: isLargeDesktop ? 24 : 20,
+            }
+          ]}>
+            {quickActions.map((action, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  responsiveStyles.quickActionCard,
+                  { backgroundColor: action.bgColor },
+                  isWeb && isDesktop && {
+                    flex: 1,
+                  }
+                ]}
+                onPress={action.onPress}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.quickActionIconContainer,
+                  { backgroundColor: action.color },
+                  isWeb && isDesktop && {
+                    width: isLargeDesktop ? 56 : 52,
+                    height: isLargeDesktop ? 56 : 52,
+                    borderRadius: isLargeDesktop ? 28 : 26,
+                  }
+                ]}>
+                  <action.icon 
+                    size={isWeb && isDesktop ? (isLargeDesktop ? 28 : 26) : 24} 
+                    color="#FFFFFF" 
+                    strokeWidth={2} 
+                  />
+                </View>
+                <View style={styles.quickActionContent}>
+                  <Text style={responsiveStyles.quickActionTitle}>{action.title}</Text>
+                  <Text style={responsiveStyles.quickActionDescription}>
+                    {action.description}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {/* Quick Stats - Desktop Only */}
@@ -390,14 +472,54 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 20,
   },
-  statsSection: {
-    marginBottom: 40,
+  quickActionsSection: {
+    marginBottom: 32,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 20,
+  },
+  quickActionsGrid: {
+    gap: 16,
+  },
+  quickActionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 12,
+    elevation: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quickActionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  quickActionContent: {
+    flex: 1,
+  },
+  quickActionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  quickActionDescription: {
+    fontSize: 13,
+    color: '#8E8E93',
+    lineHeight: 18,
+  },
+  statsSection: {
+    marginBottom: 40,
   },
   statsGrid: {
     flexDirection: 'row',

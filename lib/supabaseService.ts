@@ -15,6 +15,15 @@ export type UserProfile = Database['public']['Tables']['users']['Row'];
 // Type for inserting new user profiles
 export type UserProfileInsert = Database['public']['Tables']['users']['Insert'];
 
+// Care relationship types from the care_relationships table
+export type CareRelationship = Database['public']['Tables']['care_relationships']['Row'];
+
+// Type for inserting new care relationships
+export type CareRelationshipInsert = Database['public']['Tables']['care_relationships']['Insert'];
+
+// Type for updating existing care relationships
+export type CareRelationshipUpdate = Database['public']['Tables']['care_relationships']['Update'];
+
 // Utility function to create a timeout promise
 function createTimeoutPromise<T>(timeoutMs: number, errorMessage: string): Promise<T> {
   return new Promise((_, reject) => {
@@ -422,6 +431,263 @@ export class SupabaseService {
       }
     } catch (error) {
       console.error('Error signing out:', error);
+      throw error;
+    }
+  }
+
+  // ===== CARE RELATIONSHIP METHODS =====
+
+  // Add a patient to a provider's care list
+  static async addPatientToProvider(providerId: string, patientId: string): Promise<CareRelationship> {
+    try {
+      const relationshipData: CareRelationshipInsert = {
+        provider_id: providerId,
+        patient_id: patientId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const insertPromise = supabase
+        .from('care_relationships')
+        .insert(relationshipData)
+        .select()
+        .single();
+
+      const { data, error } = await withTimeout(
+        insertPromise,
+        this.DEFAULT_TIMEOUT,
+        'addPatientToProvider'
+      );
+
+      if (error) {
+        console.error('Error adding patient to provider:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error adding patient to provider:', error);
+      throw error;
+    }
+  }
+
+  // Get all patients for a specific provider
+  static async getPatientsForProvider(providerId: string): Promise<UserProfile[]> {
+    try {
+      const fetchPromise = supabase
+        .from('care_relationships')
+        .select(`
+          patient_id,
+          users!care_relationships_patient_id_fkey (
+            id,
+            email,
+            username,
+            full_name,
+            avatar_url,
+            role,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq('provider_id', providerId);
+
+      const { data, error } = await withTimeout(
+        fetchPromise,
+        this.DEFAULT_TIMEOUT,
+        'getPatientsForProvider'
+      );
+
+      if (error) {
+        console.error('Error fetching patients for provider:', error);
+        throw error;
+      }
+
+      // Extract the user profiles from the joined data
+      return data?.map(relationship => relationship.users).filter(Boolean) || [];
+    } catch (error) {
+      console.error('Error fetching patients for provider:', error);
+      throw error;
+    }
+  }
+
+  // Get all providers for a specific patient
+  static async getProvidersForPatient(patientId: string): Promise<UserProfile[]> {
+    try {
+      const fetchPromise = supabase
+        .from('care_relationships')
+        .select(`
+          provider_id,
+          users!care_relationships_provider_id_fkey (
+            id,
+            email,
+            username,
+            full_name,
+            avatar_url,
+            role,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq('patient_id', patientId);
+
+      const { data, error } = await withTimeout(
+        fetchPromise,
+        this.DEFAULT_TIMEOUT,
+        'getProvidersForPatient'
+      );
+
+      if (error) {
+        console.error('Error fetching providers for patient:', error);
+        throw error;
+      }
+
+      // Extract the user profiles from the joined data
+      return data?.map(relationship => relationship.users).filter(Boolean) || [];
+    } catch (error) {
+      console.error('Error fetching providers for patient:', error);
+      throw error;
+    }
+  }
+
+  // Remove a patient from a provider's care list
+  static async removePatientFromProvider(providerId: string, patientId: string): Promise<void> {
+    try {
+      const deletePromise = supabase
+        .from('care_relationships')
+        .delete()
+        .eq('provider_id', providerId)
+        .eq('patient_id', patientId);
+
+      const { error } = await withTimeout(
+        deletePromise,
+        this.DEFAULT_TIMEOUT,
+        'removePatientFromProvider'
+      );
+
+      if (error) {
+        console.error('Error removing patient from provider:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Error removing patient from provider:', error);
+      throw error;
+    }
+  }
+
+  // Create a task for a specific patient (used by providers)
+  static async createTaskForPatient(
+    patientId: string, 
+    taskData: Omit<CareTaskInsert, 'user_id'>
+  ): Promise<CareTask> {
+    try {
+      const getUserPromise = supabase.auth.getUser();
+      const { data: { user } } = await withTimeout(
+        getUserPromise,
+        this.DEFAULT_TIMEOUT,
+        'getCurrentUserForCreateTask'
+      );
+
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Prepare task data with the patient's user_id
+      const taskDataWithUserId: CareTaskInsert = {
+        ...taskData,
+        user_id: patientId,
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log('Creating task for patient:', taskDataWithUserId);
+
+      const insertPromise = supabase
+        .from('tasks')
+        .insert(taskDataWithUserId)
+        .select()
+        .single();
+
+      const { data, error } = await withTimeout(
+        insertPromise,
+        this.DEFAULT_TIMEOUT,
+        'createTaskForPatient'
+      );
+
+      if (error) {
+        console.error('Error creating task for patient:', error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error creating task for patient:', error);
+      throw error;
+    }
+  }
+
+  // Fetch all tasks for patients under a provider's care
+  static async fetchTasksForProvider(providerId: string): Promise<CareTask[]> {
+    try {
+      const fetchPromise = supabase
+        .from('tasks')
+        .select(`
+          *,
+          users!tasks_user_id_fkey (
+            id,
+            email,
+            username,
+            full_name
+          )
+        `)
+        .in('user_id', 
+          supabase
+            .from('care_relationships')
+            .select('patient_id')
+            .eq('provider_id', providerId)
+        )
+        .order('created_at', { ascending: true });
+
+      const { data, error } = await withTimeout(
+        fetchPromise,
+        this.DEFAULT_TIMEOUT,
+        'fetchTasksForProvider'
+      );
+
+      if (error) {
+        console.error('Error fetching tasks for provider:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching tasks for provider:', error);
+      throw error;
+    }
+  }
+
+  // Search for users by email (for providers to find patients)
+  static async searchUsersByEmail(email: string): Promise<UserProfile[]> {
+    try {
+      const searchPromise = supabase
+        .from('users')
+        .select('*')
+        .ilike('email', `%${email}%`)
+        .eq('role', 'patient')
+        .limit(10);
+
+      const { data, error } = await withTimeout(
+        searchPromise,
+        this.DEFAULT_TIMEOUT,
+        'searchUsersByEmail'
+      );
+
+      if (error) {
+        console.error('Error searching users by email:', error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('Error searching users by email:', error);
       throw error;
     }
   }
