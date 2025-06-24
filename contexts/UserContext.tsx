@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { SupabaseService, UserProfile } from '@/lib/supabaseService';
 import { supabase } from '@/lib/supabase';
 import { Platform } from 'react-native';
@@ -24,13 +24,25 @@ export function UserProvider({ children }: UserProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Use refs to prevent infinite loops
+  const isLoadingProfile = useRef(false);
+  const lastSessionId = useRef<string | null>(null);
+  const mounted = useRef(true);
 
   // Clear error function
   const clearError = () => setError(null);
 
-  // Load user profile with comprehensive error handling and detailed logging
-  const loadUserProfile = async (): Promise<void> => {
+  // Load user profile with loop prevention
+  const loadUserProfile = async (forceReload: boolean = false): Promise<void> => {
+    // Prevent concurrent profile loads
+    if (isLoadingProfile.current && !forceReload) {
+      console.log('Profile load already in progress, skipping...');
+      return;
+    }
+
     try {
+      isLoadingProfile.current = true;
       console.log('=== LOADING USER PROFILE ===');
       setIsLoading(true);
       setError(null);
@@ -39,6 +51,9 @@ export function UserProvider({ children }: UserProviderProps) {
       console.log('Step 1: Checking authentication...');
       const isAuth = await SupabaseService.isAuthenticated();
       console.log('Authentication result:', isAuth);
+      
+      if (!mounted.current) return;
+      
       setIsAuthenticated(isAuth);
 
       if (!isAuth) {
@@ -51,6 +66,8 @@ export function UserProvider({ children }: UserProviderProps) {
       // Get user profile
       console.log('Step 2: Getting user profile...');
       const profile = await SupabaseService.getCurrentUserProfile();
+      
+      if (!mounted.current) return;
       
       if (profile) {
         console.log('User profile loaded successfully:', {
@@ -69,15 +86,15 @@ export function UserProvider({ children }: UserProviderProps) {
 
     } catch (err: any) {
       console.error('=== ERROR LOADING USER PROFILE ===');
-      console.error('Error type:', typeof err);
-      console.error('Error name:', err.name);
-      console.error('Error message:', err.message);
-      console.error('Error status:', err.status);
-      console.error('Error code:', err.code);
-      console.error('Error details:', err.details);
-      console.error('Error hint:', err.hint);
-      console.error('Full error object:', err);
-      console.error('Error stack:', err.stack);
+      console.error('Error details:', {
+        type: typeof err,
+        name: err.name,
+        message: err.message,
+        status: err.status,
+        code: err.code
+      });
+      
+      if (!mounted.current) return;
       
       // Handle specific error types
       if (err.message?.includes('Auth session missing') || err.name === 'AuthSessionMissingError') {
@@ -93,10 +110,13 @@ export function UserProvider({ children }: UserProviderProps) {
         setUserProfile(null);
       }
     } finally {
-      console.log('=== FINISHED LOADING USER PROFILE ===');
-      setIsLoading(false);
-      if (!isInitialized) {
-        setIsInitialized(true);
+      isLoadingProfile.current = false;
+      if (mounted.current) {
+        console.log('=== FINISHED LOADING USER PROFILE ===');
+        setIsLoading(false);
+        if (!isInitialized) {
+          setIsInitialized(true);
+        }
       }
     }
   };
@@ -104,74 +124,75 @@ export function UserProvider({ children }: UserProviderProps) {
   // Refresh profile function
   const refreshProfile = async () => {
     console.log('=== REFRESH PROFILE REQUESTED ===');
-    await loadUserProfile();
+    await loadUserProfile(true); // Force reload
   };
 
   // Initialize and set up auth state listener
   useEffect(() => {
-    let mounted = true;
+    mounted.current = true;
     let authSubscription: any = null;
 
     const initializeAuth = async () => {
       try {
         console.log('=== INITIALIZING AUTHENTICATION ===');
         
-        // Check initial session without timeout to see raw errors
+        // Check initial session
         console.log('Getting initial session...');
         const { data: { session }, error } = await supabase.auth.getSession();
 
-        if (mounted) {
-          if (error) {
-            console.error('=== INITIAL SESSION ERROR ===');
-            console.error('Error type:', typeof error);
-            console.error('Error name:', error.name);
-            console.error('Error message:', error.message);
-            console.error('Error status:', error.status);
-            console.error('Full error object:', error);
-            setIsAuthenticated(false);
-            setUserProfile(null);
-            setError(`Session error: ${error.message}`);
-          } else if (session) {
-            console.log('Initial session found:', {
-              user_id: session.user?.id,
-              email: session.user?.email,
-              expires_at: session.expires_at,
-              access_token: session.access_token ? 'present' : 'missing',
-              refresh_token: session.refresh_token ? 'present' : 'missing'
-            });
-            setIsAuthenticated(true);
-            await loadUserProfile();
-          } else {
-            console.log('No initial session found');
-            setIsAuthenticated(false);
-            setUserProfile(null);
-            setIsLoading(false);
-            setIsInitialized(true);
-          }
+        if (!mounted.current) return;
+
+        if (error) {
+          console.error('Initial session error:', error.message);
+          setIsAuthenticated(false);
+          setUserProfile(null);
+          setError(`Session error: ${error.message}`);
+          setIsLoading(false);
+          setIsInitialized(true);
+          return;
         }
 
-        // Set up auth state change listener
+        if (session) {
+          console.log('Initial session found for user:', session.user?.email);
+          lastSessionId.current = session.access_token;
+          setIsAuthenticated(true);
+          await loadUserProfile();
+        } else {
+          console.log('No initial session found');
+          setIsAuthenticated(false);
+          setUserProfile(null);
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+
+        // Set up auth state change listener with loop prevention
         console.log('Setting up auth state change listener...');
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
-            if (!mounted) return;
+            if (!mounted.current) return;
 
             console.log('=== AUTH STATE CHANGE ===');
             console.log('Event:', event);
             console.log('Session present:', !!session);
-            if (session) {
-              console.log('Session details:', {
-                user_id: session.user?.id,
-                email: session.user?.email,
-                expires_at: session.expires_at
-              });
+            
+            // Prevent processing the same session multiple times
+            const currentSessionId = session?.access_token || null;
+            if (event === 'SIGNED_IN' && currentSessionId === lastSessionId.current) {
+              console.log('Ignoring duplicate SIGNED_IN event for same session');
+              return;
             }
             
             try {
               switch (event) {
+                case 'INITIAL_SESSION':
+                  // Already handled in initialization
+                  console.log('Initial session event - already processed');
+                  break;
+                  
                 case 'SIGNED_IN':
-                  if (session) {
-                    console.log('User signed in, loading profile...');
+                  if (session && currentSessionId !== lastSessionId.current) {
+                    console.log('User signed in with new session, loading profile...');
+                    lastSessionId.current = currentSessionId;
                     setIsAuthenticated(true);
                     await loadUserProfile();
                   }
@@ -179,6 +200,7 @@ export function UserProvider({ children }: UserProviderProps) {
                   
                 case 'SIGNED_OUT':
                   console.log('User signed out, clearing profile...');
+                  lastSessionId.current = null;
                   setIsAuthenticated(false);
                   setUserProfile(null);
                   setError(null);
@@ -187,9 +209,11 @@ export function UserProvider({ children }: UserProviderProps) {
                   
                 case 'TOKEN_REFRESHED':
                   console.log('Token refreshed');
-                  if (session) {
+                  if (session && currentSessionId !== lastSessionId.current) {
+                    console.log('New token received, updating session reference');
+                    lastSessionId.current = currentSessionId;
                     setIsAuthenticated(true);
-                    // Don't reload profile on token refresh unless we don't have one
+                    // Only reload profile if we don't have one
                     if (!userProfile) {
                       await loadUserProfile();
                     }
@@ -200,7 +224,7 @@ export function UserProvider({ children }: UserProviderProps) {
                   console.log('User updated, refreshing profile...');
                   if (session) {
                     setIsAuthenticated(true);
-                    await loadUserProfile();
+                    await loadUserProfile(true); // Force reload for user updates
                   }
                   break;
                   
@@ -209,9 +233,8 @@ export function UserProvider({ children }: UserProviderProps) {
                   break;
               }
             } catch (authError) {
-              console.error('=== AUTH STATE CHANGE ERROR ===');
               console.error('Error handling auth state change:', authError);
-              if (mounted) {
+              if (mounted.current) {
                 setError(`Authentication error: ${authError}`);
               }
             }
@@ -221,12 +244,8 @@ export function UserProvider({ children }: UserProviderProps) {
         authSubscription = subscription;
 
       } catch (initError) {
-        console.error('=== INITIALIZATION ERROR ===');
-        console.error('Error type:', typeof initError);
-        console.error('Error name:', (initError as any).name);
-        console.error('Error message:', (initError as any).message);
-        console.error('Full error object:', initError);
-        if (mounted) {
+        console.error('Initialization error:', initError);
+        if (mounted.current) {
           setError(`Failed to initialize authentication: ${initError}`);
           setIsLoading(false);
           setIsInitialized(true);
@@ -238,32 +257,38 @@ export function UserProvider({ children }: UserProviderProps) {
 
     // Cleanup function
     return () => {
-      mounted = false;
+      mounted.current = false;
+      isLoadingProfile.current = false;
       if (authSubscription) {
         console.log('Cleaning up auth subscription');
         authSubscription.unsubscribe();
       }
     };
-  }, []);
+  }, []); // Empty dependency array to run only once
 
-  // Handle visibility change for web platform
+  // Handle visibility change for web platform (with throttling)
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
+    let visibilityTimeout: NodeJS.Timeout;
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isAuthenticated && !userProfile && !isLoading) {
-        console.log('=== PAGE BECAME VISIBLE ===');
-        console.log('Checking auth state after visibility change...');
-        // Small delay to avoid race conditions
-        setTimeout(() => {
-          refreshProfile();
-        }, 100);
+        console.log('Page became visible, checking auth state...');
+        // Throttle visibility-based refreshes
+        clearTimeout(visibilityTimeout);
+        visibilityTimeout = setTimeout(() => {
+          if (mounted.current && !isLoadingProfile.current) {
+            refreshProfile();
+          }
+        }, 1000); // 1 second throttle
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
     return () => {
+      clearTimeout(visibilityTimeout);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isAuthenticated, userProfile, isLoading]);

@@ -9,47 +9,59 @@ import { UserProvider, useUser } from '@/contexts/UserContext';
 // Main app content that uses the UserContext
 function AppContent() {
   const { userProfile, isLoading, isAuthenticated, error } = useUser();
-  const [hasNavigated, setHasNavigated] = useState(false);
+  const [navigationState, setNavigationState] = useState<'pending' | 'navigated'>('pending');
 
   useEffect(() => {
-    // Don't navigate until we're done loading and haven't navigated yet
-    if (isLoading || hasNavigated) return;
+    // Don't navigate until we're done loading
+    if (isLoading) {
+      setNavigationState('pending');
+      return;
+    }
 
-    console.log('Navigation decision:', { isAuthenticated, hasProfile: !!userProfile, error });
+    // Only navigate once per auth state change
+    if (navigationState === 'navigated') {
+      return;
+    }
+
+    console.log('Navigation decision:', { 
+      isAuthenticated, 
+      hasProfile: !!userProfile, 
+      error: !!error,
+      navigationState 
+    });
 
     try {
       if (isAuthenticated && userProfile) {
         console.log('Navigating to tabs - user authenticated with profile');
         router.replace('/(tabs)');
-        setHasNavigated(true);
+        setNavigationState('navigated');
       } else if (!isAuthenticated) {
         console.log('Navigating to login - user not authenticated');
         router.replace('/login');
-        setHasNavigated(true);
+        setNavigationState('navigated');
       } else if (isAuthenticated && !userProfile && !error) {
-        // User is authenticated but no profile - this might be a new user
-        // Stay on current screen and let the UserContext handle profile creation
+        // User is authenticated but no profile - wait for profile creation
         console.log('User authenticated but no profile found - waiting...');
+        // Don't navigate yet, stay in loading state
       } else if (error) {
         console.log('Navigation with error state - going to login');
         router.replace('/login');
-        setHasNavigated(true);
+        setNavigationState('navigated');
       }
     } catch (navError) {
       console.error('Navigation error:', navError);
-      // Fallback to login on navigation errors
       router.replace('/login');
-      setHasNavigated(true);
+      setNavigationState('navigated');
     }
-  }, [isLoading, isAuthenticated, userProfile, error, hasNavigated]);
+  }, [isLoading, isAuthenticated, userProfile, error, navigationState]);
 
-  // Reset navigation flag when auth state changes significantly
+  // Reset navigation state when auth state changes significantly
   useEffect(() => {
-    setHasNavigated(false);
+    setNavigationState('pending');
   }, [isAuthenticated]);
 
   // Show loading screen while determining auth state
-  if (isLoading) {
+  if (isLoading || navigationState === 'pending') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
