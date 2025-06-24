@@ -45,7 +45,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: strin
 
 export class SupabaseService {
   // Increased timeout for operations (30 seconds to handle slow connections)
-  private static readonly DEFAULT_TIMEOUT = 30000;
+  private static readonly DEFAULT_TIMEOUT = 10000;
 
   // Sign in with email and password
   static async signInWithEmailAndPassword(email: string, password: string): Promise<void> {
