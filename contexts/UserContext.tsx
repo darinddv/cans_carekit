@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { SupabaseService, UserProfile } from '@/lib/supabaseService';
 import { supabase } from '@/lib/supabase';
-import { Platform } from 'react-native';
 
 interface UserContextType {
   userProfile: UserProfile | null;
@@ -23,279 +22,132 @@ export function UserProvider({ children }: UserProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   
-  // Use refs to prevent infinite loops
-  const isLoadingProfile = useRef(false);
-  const lastSessionId = useRef<string | null>(null);
-  const mounted = useRef(true);
+  // Prevent multiple concurrent operations
+  const isLoadingRef = useRef(false);
+  const hasInitialized = useRef(false);
 
-  // Clear error function
   const clearError = () => setError(null);
 
-  // Load user profile with loop prevention
-  const loadUserProfile = async (forceReload: boolean = false): Promise<void> => {
-    // Prevent concurrent profile loads
-    if (isLoadingProfile.current && !forceReload) {
+  const loadUserProfile = async (): Promise<void> => {
+    if (isLoadingRef.current) {
       console.log('Profile load already in progress, skipping...');
       return;
     }
 
     try {
-      isLoadingProfile.current = true;
-      console.log('=== LOADING USER PROFILE ===');
-      setIsLoading(true);
-      setError(null);
-
-      // Check if user is authenticated first
-      console.log('Step 1: Checking authentication...');
-      const isAuth = await SupabaseService.isAuthenticated();
-      console.log('Authentication result:', isAuth);
+      isLoadingRef.current = true;
+      console.log('Loading user profile...');
       
-      if (!mounted.current) return;
-      
-      setIsAuthenticated(isAuth);
-
-      if (!isAuth) {
-        console.log('User not authenticated, clearing profile');
-        setUserProfile(null);
-        setIsLoading(false);
-        return;
-      }
-
-      // Get user profile
-      console.log('Step 2: Getting user profile...');
       const profile = await SupabaseService.getCurrentUserProfile();
       
-      if (!mounted.current) return;
-      
       if (profile) {
-        console.log('User profile loaded successfully:', {
-          id: profile.id,
-          email: profile.email,
-          role: profile.role,
-          created_at: profile.created_at
-        });
+        console.log('Profile loaded:', profile.email);
         setUserProfile(profile);
+        setIsAuthenticated(true);
         setError(null);
       } else {
-        console.log('No user profile found');
+        console.log('No profile found');
         setUserProfile(null);
-        // Don't set this as an error - user might not have a profile yet
+        setIsAuthenticated(false);
       }
-
     } catch (err: any) {
-      console.error('=== ERROR LOADING USER PROFILE ===');
-      console.error('Error details:', {
-        type: typeof err,
-        name: err.name,
-        message: err.message,
-        status: err.status,
-        code: err.code
-      });
+      console.error('Error loading profile:', err.message);
       
-      if (!mounted.current) return;
-      
-      // Handle specific error types
-      if (err.message?.includes('Auth session missing') || err.name === 'AuthSessionMissingError') {
-        console.log('Auth session missing, user is not authenticated');
+      if (err.message?.includes('Auth session missing')) {
         setIsAuthenticated(false);
         setUserProfile(null);
-        setError(null); // Don't treat this as an error
+        setError(null);
       } else {
-        // Set error for other types of failures
-        const errorMessage = err.message || 'Failed to load user profile';
-        console.error('Setting error state:', errorMessage);
-        setError(errorMessage);
+        setError(err.message || 'Failed to load profile');
+        setIsAuthenticated(false);
         setUserProfile(null);
       }
     } finally {
-      isLoadingProfile.current = false;
-      if (mounted.current) {
-        console.log('=== FINISHED LOADING USER PROFILE ===');
-        setIsLoading(false);
-        if (!isInitialized) {
-          setIsInitialized(true);
-        }
-      }
+      isLoadingRef.current = false;
+      setIsLoading(false);
     }
   };
 
-  // Refresh profile function
   const refreshProfile = async () => {
-    console.log('=== REFRESH PROFILE REQUESTED ===');
-    await loadUserProfile(true); // Force reload
+    console.log('Refreshing profile...');
+    setIsLoading(true);
+    await loadUserProfile();
   };
 
-  // Initialize and set up auth state listener
   useEffect(() => {
-    mounted.current = true;
-    let authSubscription: any = null;
+    if (hasInitialized.current) {
+      return;
+    }
+
+    hasInitialized.current = true;
+    console.log('Initializing UserContext...');
 
     const initializeAuth = async () => {
       try {
-        console.log('=== INITIALIZING AUTHENTICATION ===');
-        
         // Check initial session
-        console.log('Getting initial session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
-
-        if (!mounted.current) return;
-
-        if (error) {
-          console.error('Initial session error:', error.message);
-          setIsAuthenticated(false);
-          setUserProfile(null);
-          setError(`Session error: ${error.message}`);
-          setIsLoading(false);
-          setIsInitialized(true);
-          return;
-        }
-
+        const { data: { session } } = await supabase.auth.getSession();
+        
         if (session) {
-          console.log('Initial session found for user:', session.user?.email);
-          lastSessionId.current = session.access_token;
-          setIsAuthenticated(true);
+          console.log('Initial session found');
           await loadUserProfile();
         } else {
-          console.log('No initial session found');
+          console.log('No initial session');
           setIsAuthenticated(false);
           setUserProfile(null);
           setIsLoading(false);
-          setIsInitialized(true);
         }
 
-        // Set up auth state change listener with loop prevention
-        console.log('Setting up auth state change listener...');
+        // Set up auth listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, session) => {
-            if (!mounted.current) return;
-
-            console.log('=== AUTH STATE CHANGE ===');
-            console.log('Event:', event);
-            console.log('Session present:', !!session);
+            console.log('Auth event:', event, !!session);
             
-            // Prevent processing the same session multiple times
-            const currentSessionId = session?.access_token || null;
-            if (event === 'SIGNED_IN' && currentSessionId === lastSessionId.current) {
-              console.log('Ignoring duplicate SIGNED_IN event for same session');
-              return;
-            }
-            
-            try {
-              switch (event) {
-                case 'INITIAL_SESSION':
-                  // Already handled in initialization
-                  console.log('Initial session event - already processed');
-                  break;
-                  
-                case 'SIGNED_IN':
-                  if (session && currentSessionId !== lastSessionId.current) {
-                    console.log('User signed in with new session, loading profile...');
-                    lastSessionId.current = currentSessionId;
-                    setIsAuthenticated(true);
-                    await loadUserProfile();
-                  }
-                  break;
-                  
-                case 'SIGNED_OUT':
-                  console.log('User signed out, clearing profile...');
-                  lastSessionId.current = null;
-                  setIsAuthenticated(false);
-                  setUserProfile(null);
-                  setError(null);
-                  setIsLoading(false);
-                  break;
-                  
-                case 'TOKEN_REFRESHED':
-                  console.log('Token refreshed');
-                  if (session && currentSessionId !== lastSessionId.current) {
-                    console.log('New token received, updating session reference');
-                    lastSessionId.current = currentSessionId;
-                    setIsAuthenticated(true);
-                    // Only reload profile if we don't have one
-                    if (!userProfile) {
-                      await loadUserProfile();
-                    }
-                  }
-                  break;
-                  
-                case 'USER_UPDATED':
-                  console.log('User updated, refreshing profile...');
-                  if (session) {
-                    setIsAuthenticated(true);
-                    await loadUserProfile(true); // Force reload for user updates
-                  }
-                  break;
-                  
-                default:
-                  console.log('Unhandled auth event:', event);
-                  break;
-              }
-            } catch (authError) {
-              console.error('Error handling auth state change:', authError);
-              if (mounted.current) {
-                setError(`Authentication error: ${authError}`);
-              }
+            switch (event) {
+              case 'SIGNED_IN':
+                if (session) {
+                  setIsLoading(true);
+                  await loadUserProfile();
+                }
+                break;
+                
+              case 'SIGNED_OUT':
+                setIsAuthenticated(false);
+                setUserProfile(null);
+                setError(null);
+                setIsLoading(false);
+                break;
+                
+              case 'TOKEN_REFRESHED':
+                // Don't reload profile on token refresh if we already have one
+                if (session && !userProfile) {
+                  await loadUserProfile();
+                }
+                break;
             }
           }
         );
 
-        authSubscription = subscription;
-
-      } catch (initError) {
-        console.error('Initialization error:', initError);
-        if (mounted.current) {
-          setError(`Failed to initialize authentication: ${initError}`);
-          setIsLoading(false);
-          setIsInitialized(true);
-        }
+        return () => {
+          subscription.unsubscribe();
+        };
+      } catch (err: any) {
+        console.error('Auth initialization error:', err);
+        setError(err.message || 'Failed to initialize');
+        setIsLoading(false);
       }
     };
 
-    initializeAuth();
-
-    // Cleanup function
-    return () => {
-      mounted.current = false;
-      isLoadingProfile.current = false;
-      if (authSubscription) {
-        console.log('Cleaning up auth subscription');
-        authSubscription.unsubscribe();
-      }
-    };
-  }, []); // Empty dependency array to run only once
-
-  // Handle visibility change for web platform (with throttling)
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-
-    let visibilityTimeout: NodeJS.Timeout;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && isAuthenticated && !userProfile && !isLoading) {
-        console.log('Page became visible, checking auth state...');
-        // Throttle visibility-based refreshes
-        clearTimeout(visibilityTimeout);
-        visibilityTimeout = setTimeout(() => {
-          if (mounted.current && !isLoadingProfile.current) {
-            refreshProfile();
-          }
-        }, 1000); // 1 second throttle
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const cleanup = initializeAuth();
     
     return () => {
-      clearTimeout(visibilityTimeout);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      cleanup?.then(fn => fn?.());
     };
-  }, [isAuthenticated, userProfile, isLoading]);
+  }, []); // Only run once
 
   const value: UserContextType = {
     userProfile,
-    isLoading: isLoading || !isInitialized,
+    isLoading,
     isAuthenticated,
     error,
     refreshProfile,
