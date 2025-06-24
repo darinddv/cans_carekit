@@ -11,20 +11,7 @@ import {
   Dimensions,
   RefreshControl,
 } from 'react-native';
-import { 
-  User, 
-  LogOut, 
-  Settings, 
-  Shield, 
-  Heart, 
-  Briefcase,
-  Mail,
-  Calendar,
-  Clock,
-  ChevronRight,
-  AlertCircle,
-  RefreshCw
-} from 'lucide-react-native';
+import { User, LogOut, Settings, Shield, Heart, Briefcase, Mail, Calendar, Clock, ChevronRight, CircleAlert as AlertCircle, RefreshCw } from 'lucide-react-native';
 import { useUser } from '@/contexts/UserContext';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
