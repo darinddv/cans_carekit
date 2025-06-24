@@ -416,7 +416,7 @@ export class SupabaseService {
     }
   }
 
-  // Sign out
+  // Sign out - with graceful handling of AuthSessionMissingError
   static async signOut(): Promise<void> {
     try {
       const signOutPromise = supabase.auth.signOut();
@@ -425,11 +425,29 @@ export class SupabaseService {
         this.DEFAULT_TIMEOUT, 
         'signOut'
       );
+      
       if (error) {
+        // Check if this is an AuthSessionMissingError
+        if (error.message?.includes('Auth session missing') || error.name === 'AuthSessionMissingError') {
+          // This is expected when the session is already invalid
+          // Log it as a warning but don't throw - let the auth state change handle navigation
+          console.warn('Auth session was already missing during sign out - user is effectively signed out');
+          return;
+        }
+        
         console.error('Error signing out:', error);
         throw error;
       }
     } catch (error) {
+      // Handle the case where the error is thrown directly (not in the response)
+      if (error instanceof Error && (
+        error.message?.includes('Auth session missing') || 
+        error.name === 'AuthSessionMissingError'
+      )) {
+        console.warn('Auth session was already missing during sign out - user is effectively signed out');
+        return;
+      }
+      
       console.error('Error signing out:', error);
       throw error;
     }
