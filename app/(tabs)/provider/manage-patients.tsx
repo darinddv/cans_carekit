@@ -12,6 +12,7 @@ import {
   Dimensions,
   Alert,
   Modal,
+  Switch,
 } from 'react-native';
 import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3, ChevronDown, Check, Search, X, CreditCard as Edit3 } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert, CareTask } from '@/lib/supabaseService';
@@ -36,6 +37,7 @@ function ManagePatientsContent() {
   const [patientSearchQuery, setPatientSearchQuery] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskTime, setTaskTime] = useState('');
+  const [taskCompleted, setTaskCompleted] = useState(false);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
   const [currentProviderId, setCurrentProviderId] = useState<string | null>(null);
   const [expandedPatients, setExpandedPatients] = useState<Set<string>>(new Set());
@@ -182,7 +184,7 @@ function ManagePatientsContent() {
         id: uuidv4(),
         title: taskTitle.trim(),
         time: taskTime.trim(),
-        completed: false,
+        completed: taskCompleted,
         created_at: new Date().toISOString(),
       };
 
@@ -191,6 +193,7 @@ function ManagePatientsContent() {
       // Reset form
       setTaskTitle('');
       setTaskTime('');
+      setTaskCompleted(false);
       setSelectedPatient(null);
       setShowCreateTask(false);
       setPatientSearchQuery('');
@@ -211,6 +214,7 @@ function ManagePatientsContent() {
     setSelectedPatient(patient);
     setTaskTitle(task.title);
     setTaskTime(task.time);
+    setTaskCompleted(task.completed);
     setShowEditTask(true);
   };
 
@@ -227,6 +231,7 @@ function ManagePatientsContent() {
         ...selectedTask,
         title: taskTitle.trim(),
         time: taskTime.trim(),
+        completed: taskCompleted,
         updated_at: new Date().toISOString(),
       };
 
@@ -235,6 +240,7 @@ function ManagePatientsContent() {
       // Reset form
       setTaskTitle('');
       setTaskTime('');
+      setTaskCompleted(false);
       setSelectedTask(null);
       setSelectedPatient(null);
       setShowEditTask(false);
@@ -514,6 +520,33 @@ function ManagePatientsContent() {
               />
             </View>
 
+            {/* Task Status */}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Task Status</Text>
+              <View style={styles.statusToggleContainer}>
+                <View style={styles.statusToggleContent}>
+                  <View style={styles.statusToggleInfo}>
+                    <Text style={styles.statusToggleLabel}>
+                      {taskCompleted ? 'Completed' : 'Pending'}
+                    </Text>
+                    <Text style={styles.statusToggleDescription}>
+                      {taskCompleted 
+                        ? 'Task is marked as completed' 
+                        : 'Task is pending completion'
+                      }
+                    </Text>
+                  </View>
+                  <Switch
+                    value={taskCompleted}
+                    onValueChange={setTaskCompleted}
+                    trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+                    thumbColor={taskCompleted ? '#FFFFFF' : '#FFFFFF'}
+                    ios_backgroundColor="#E5E5EA"
+                  />
+                </View>
+              </View>
+            </View>
+
             <TouchableOpacity
               style={[
                 responsiveStyles.actionButton, 
@@ -683,9 +716,17 @@ function ManagePatientsContent() {
                                   ]}>
                                     {task.time}
                                   </Text>
-                                  <Text style={styles.taskStatus}>
-                                    {task.completed ? 'Completed' : 'Pending'}
-                                  </Text>
+                                  <View style={[
+                                    styles.taskStatusBadge,
+                                    task.completed ? styles.taskStatusCompleted : styles.taskStatusPending
+                                  ]}>
+                                    <Text style={[
+                                      styles.taskStatusText,
+                                      task.completed ? styles.taskStatusTextCompleted : styles.taskStatusTextPending
+                                    ]}>
+                                      {task.completed ? 'Completed' : 'Pending'}
+                                    </Text>
+                                  </View>
                                 </View>
                                 <View style={styles.taskActions}>
                                   <TouchableOpacity
@@ -869,6 +910,7 @@ function ManagePatientsContent() {
           setShowEditTask(false);
           setTaskTitle('');
           setTaskTime('');
+          setTaskCompleted(false);
           setSelectedTask(null);
           setSelectedPatient(null);
         }}
@@ -880,6 +922,7 @@ function ManagePatientsContent() {
                 setShowEditTask(false);
                 setTaskTitle('');
                 setTaskTime('');
+                setTaskCompleted(false);
                 setSelectedTask(null);
                 setSelectedPatient(null);
               }}
@@ -954,23 +997,32 @@ function ManagePatientsContent() {
                 />
               </View>
 
-              {/* Task Status */}
-              {selectedTask && (
-                <View style={styles.taskStatusInfo}>
-                  <Text style={styles.taskStatusLabel}>Status</Text>
-                  <View style={[
-                    styles.taskStatusBadge,
-                    selectedTask.completed ? styles.taskStatusCompleted : styles.taskStatusPending
-                  ]}>
-                    <Text style={[
-                      styles.taskStatusText,
-                      selectedTask.completed ? styles.taskStatusTextCompleted : styles.taskStatusTextPending
-                    ]}>
-                      {selectedTask.completed ? 'Completed' : 'Pending'}
-                    </Text>
+              {/* Task Status Toggle */}
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Task Status</Text>
+                <View style={styles.statusToggleContainer}>
+                  <View style={styles.statusToggleContent}>
+                    <View style={styles.statusToggleInfo}>
+                      <Text style={styles.statusToggleLabel}>
+                        {taskCompleted ? 'Completed' : 'Pending'}
+                      </Text>
+                      <Text style={styles.statusToggleDescription}>
+                        {taskCompleted 
+                          ? 'Task is marked as completed' 
+                          : 'Task is pending completion'
+                        }
+                      </Text>
+                    </View>
+                    <Switch
+                      value={taskCompleted}
+                      onValueChange={setTaskCompleted}
+                      trackColor={{ false: '#E5E5EA', true: '#34C759' }}
+                      thumbColor={taskCompleted ? '#FFFFFF' : '#FFFFFF'}
+                      ios_backgroundColor="#E5E5EA"
+                    />
                   </View>
                 </View>
-              )}
+              </View>
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -1166,6 +1218,40 @@ const styles = StyleSheet.create({
     elevation: 2,
     fontWeight: '500',
   },
+  // Status Toggle Styles
+  statusToggleContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statusToggleContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  statusToggleInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  statusToggleLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  statusToggleDescription: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 18,
+  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 40,
@@ -1332,15 +1418,32 @@ const styles = StyleSheet.create({
   taskTime: {
     fontSize: 13,
     color: '#8E8E93',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   taskTimeCompleted: {
     color: '#34C759',
   },
-  taskStatus: {
+  taskStatusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  taskStatusCompleted: {
+    backgroundColor: '#E8F5E8',
+  },
+  taskStatusPending: {
+    backgroundColor: '#FFF3CD',
+  },
+  taskStatusText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#8E8E93',
+    fontWeight: '600',
+  },
+  taskStatusTextCompleted: {
+    color: '#34C759',
+  },
+  taskStatusTextPending: {
+    color: '#F59E0B',
   },
   taskActions: {
     flexDirection: 'row',
@@ -1604,36 +1707,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 8,
     elevation: 2,
-  },
-  taskStatusInfo: {
-    marginTop: 8,
-  },
-  taskStatusLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 8,
-  },
-  taskStatusBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  taskStatusCompleted: {
-    backgroundColor: '#E8F5E8',
-  },
-  taskStatusPending: {
-    backgroundColor: '#FFF3CD',
-  },
-  taskStatusText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  taskStatusTextCompleted: {
-    color: '#34C759',
-  },
-  taskStatusTextPending: {
-    color: '#F59E0B',
   },
 });
