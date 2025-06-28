@@ -11,8 +11,9 @@ import {
   Platform,
   Dimensions,
   Alert,
+  Modal,
 } from 'react-native';
-import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3 } from 'lucide-react-native';
+import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3, ChevronDown, Check } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert } from '@/lib/supabaseService';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router } from 'expo-router';
@@ -25,6 +26,7 @@ function ManagePatientsContent() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<UserProfile | null>(null);
+  const [showPatientPicker, setShowPatientPicker] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskTime, setTaskTime] = useState('');
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
@@ -149,6 +151,15 @@ function ManagePatientsContent() {
         patientEmail: patient.email,
       },
     });
+  };
+
+  const selectPatient = (patient: UserProfile) => {
+    setSelectedPatient(patient);
+    setShowPatientPicker(false);
+  };
+
+  const getDisplayName = (patient: UserProfile) => {
+    return patient.full_name || patient.username || patient.email.split('@')[0];
   };
 
   const isWeb = Platform.OS === 'web';
@@ -290,40 +301,51 @@ function ManagePatientsContent() {
           <View style={styles.section}>
             <Text style={responsiveStyles.sectionTitle}>Create New Task</Text>
             
-            {/* Patient Selection */}
+            {/* Patient Selection Dropdown */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>Select Patient</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={styles.patientSelector}
+              <TouchableOpacity
+                style={[
+                  styles.patientSelector,
+                  isWeb && isDesktop && {
+                    borderRadius: 16,
+                    paddingVertical: isLargeDesktop ? 20 : 18,
+                  }
+                ]}
+                onPress={() => setShowPatientPicker(true)}
+                activeOpacity={0.7}
               >
-                {patients.map((patient) => (
-                  <TouchableOpacity
-                    key={patient.id}
-                    style={[
-                      styles.patientSelectorItem,
-                      selectedPatient?.id === patient.id && styles.patientSelectorItemSelected
-                    ]}
-                    onPress={() => setSelectedPatient(patient)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.patientSelectorAvatar}>
-                      <User 
-                        size={16} 
-                        color={selectedPatient?.id === patient.id ? "#FFFFFF" : "#007AFF"} 
-                        strokeWidth={2} 
-                      />
+                <View style={styles.patientSelectorContent}>
+                  {selectedPatient ? (
+                    <View style={styles.selectedPatientInfo}>
+                      <View style={styles.selectedPatientAvatar}>
+                        <User 
+                          size={20} 
+                          color="#007AFF" 
+                          strokeWidth={2} 
+                        />
+                      </View>
+                      <View style={styles.selectedPatientDetails}>
+                        <Text style={styles.selectedPatientName}>
+                          {getDisplayName(selectedPatient)}
+                        </Text>
+                        <Text style={styles.selectedPatientEmail}>
+                          {selectedPatient.email}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={[
-                      styles.patientSelectorText,
-                      selectedPatient?.id === patient.id && styles.patientSelectorTextSelected
-                    ]}>
-                      {patient.full_name || patient.email.split('@')[0]}
+                  ) : (
+                    <Text style={styles.patientSelectorPlaceholder}>
+                      Choose a patient...
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                  )}
+                  <ChevronDown 
+                    size={isWeb && isDesktop ? 24 : 20} 
+                    color="#8E8E93" 
+                    strokeWidth={2} 
+                  />
+                </View>
+              </TouchableOpacity>
             </View>
 
             {/* Task Details */}
@@ -409,7 +431,7 @@ function ManagePatientsContent() {
                     </View>
                     <View style={styles.patientDetails}>
                       <Text style={styles.patientName}>
-                        {patient.full_name || patient.username || 'Unknown User'}
+                        {getDisplayName(patient)}
                       </Text>
                       <View style={styles.patientEmailContainer}>
                         <Mail 
@@ -468,6 +490,66 @@ function ManagePatientsContent() {
           )}
         </View>
       </ScrollView>
+
+      {/* Patient Picker Modal */}
+      <Modal
+        visible={showPatientPicker}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPatientPicker(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity 
+              onPress={() => setShowPatientPicker(false)}
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Select Patient</Text>
+            <View style={styles.modalHeaderSpacer} />
+          </View>
+
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {patients.map((patient) => (
+              <TouchableOpacity
+                key={patient.id}
+                style={[
+                  styles.patientPickerItem,
+                  selectedPatient?.id === patient.id && styles.patientPickerItemSelected
+                ]}
+                onPress={() => selectPatient(patient)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.patientPickerInfo}>
+                  <View style={styles.patientPickerAvatar}>
+                    <User 
+                      size={24} 
+                      color="#007AFF" 
+                      strokeWidth={2} 
+                    />
+                  </View>
+                  <View style={styles.patientPickerDetails}>
+                    <Text style={styles.patientPickerName}>
+                      {getDisplayName(patient)}
+                    </Text>
+                    <Text style={styles.patientPickerEmail}>
+                      {patient.email}
+                    </Text>
+                  </View>
+                </View>
+                {selectedPatient?.id === patient.id && (
+                  <Check 
+                    size={24} 
+                    color="#007AFF" 
+                    strokeWidth={2} 
+                  />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -592,38 +674,56 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   patientSelector: {
-    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
-  patientSelectorItem: {
+  patientSelectorContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
+    justifyContent: 'space-between',
+  },
+  selectedPatientInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  selectedPatientAvatar: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 8,
+    backgroundColor: '#F0F9FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
     borderWidth: 2,
     borderColor: '#007AFF',
   },
-  patientSelectorItemSelected: {
-    backgroundColor: '#007AFF',
+  selectedPatientDetails: {
+    flex: 1,
   },
-  patientSelectorAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  patientSelectorText: {
-    fontSize: 14,
+  selectedPatientName: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#1C1C1E',
+    marginBottom: 2,
   },
-  patientSelectorTextSelected: {
-    color: '#FFFFFF',
+  selectedPatientEmail: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  patientSelectorPlaceholder: {
+    fontSize: 16,
+    color: '#8E8E93',
+    fontWeight: '500',
   },
   input: {
     backgroundColor: '#FFFFFF',
@@ -633,7 +733,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1C1C1E',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#E5E5EA',
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowOffset: { width: 0, height: 2 },
@@ -738,5 +838,91 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     backgroundColor: '#FFEBEE',
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  modalCloseButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  modalHeaderSpacer: {
+    width: 60,
+  },
+  modalContent: {
+    flex: 1,
+    paddingTop: 8,
+  },
+  patientPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  patientPickerItemSelected: {
+    backgroundColor: '#F0F9FF',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  patientPickerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  patientPickerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F0F9FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  patientPickerDetails: {
+    flex: 1,
+  },
+  patientPickerName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  patientPickerEmail: {
+    fontSize: 15,
+    color: '#8E8E93',
+    fontWeight: '500',
   },
 });
