@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   Dimensions, 
   Platform,
-  Image
+  Image,
+  ActivityIndicator,
+  RefreshControl
 } from 'react-native';
 import { 
   Activity, 
@@ -21,12 +23,33 @@ import {
   Calendar,
   Clock,
   Plus,
-  ChevronRight
+  ChevronRight,
+  Shield,
+  Smartphone
 } from 'lucide-react-native';
 import { RoleGuard } from '@/components/RoleGuard';
+import { 
+  HealthService, 
+  HealthMetric, 
+  SleepData, 
+  HeartRateData,
+  formatSleepDuration,
+  getSleepQualityColor,
+  getHeartRateZone
+} from '@/lib/healthService';
 
 function HealthMetricsContent() {
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [permissionsGranted, setPermissionsGranted] = useState(false);
+  
+  // Health data state
+  const [sleepData, setSleepData] = useState<SleepData[]>([]);
+  const [stepsData, setStepsData] = useState<HealthMetric[]>([]);
+  const [heartRateData, setHeartRateData] = useState<HeartRateData | null>(null);
+  const [hydrationData, setHydrationData] = useState<HealthMetric[]>([]);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -35,6 +58,77 @@ function HealthMetricsContent() {
 
     return () => subscription?.remove();
   }, []);
+
+  useEffect(() => {
+    initializeHealthData();
+  }, []);
+
+  const initializeHealthData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Request permissions
+      const hasPermissions = await HealthService.requestPermissions();
+      setPermissionsGranted(hasPermissions);
+
+      if (hasPermissions) {
+        await loadHealthData();
+      }
+    } catch (err: any) {
+      console.error('Error initializing health data:', err);
+      setError(err.message || 'Failed to load health data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadHealthData = async () => {
+    try {
+      const [sleep, steps, heartRate, hydration] = await Promise.all([
+        HealthService.getSleepData(7),
+        HealthService.getStepsData(7),
+        HealthService.getHeartRateData(),
+        HealthService.getHydrationData(),
+      ]);
+
+      setSleepData(sleep);
+      setStepsData(steps);
+      setHeartRateData(heartRate);
+      setHydrationData(hydration);
+    } catch (err: any) {
+      console.error('Error loading health data:', err);
+      setError(err.message || 'Failed to load health data');
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadHealthData();
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to refresh health data');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const requestPermissions = async () => {
+    try {
+      setIsLoading(true);
+      const hasPermissions = await HealthService.requestPermissions();
+      setPermissionsGranted(hasPermissions);
+      
+      if (hasPermissions) {
+        await loadHealthData();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to request permissions');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const isWeb = Platform.OS === 'web';
   const isTablet = windowDimensions.width >= 768;
@@ -106,51 +200,55 @@ function HealthMetricsContent() {
 
   const responsiveStyles = getResponsiveStyles();
 
-  // Mock health data - in a real app, this would come from HealthKit/Health Connect
+  // Calculate current metrics from loaded data
+  const currentSleep = sleepData[0];
+  const todaySteps = stepsData[0];
+  const currentHydration = hydrationData[0];
+
   const healthMetrics = [
     {
       id: 'sleep',
       title: 'Sleep',
-      value: '7h 23m',
+      value: currentSleep ? formatSleepDuration(currentSleep.duration) : '--',
       subtitle: 'Last night',
       icon: Moon,
       color: '#6366F1',
       bgColor: '#EEF2FF',
-      trend: '+12m vs avg',
-      trendUp: true,
+      trend: currentSleep ? `${currentSleep.quality} quality` : 'No data',
+      trendUp: currentSleep?.quality === 'good' || currentSleep?.quality === 'excellent',
     },
     {
       id: 'steps',
       title: 'Steps',
-      value: '8,247',
+      value: todaySteps ? todaySteps.value.toLocaleString() : '--',
       subtitle: 'Today',
       icon: Footprints,
       color: '#10B981',
       bgColor: '#ECFDF5',
-      trend: '2,753 to goal',
-      trendUp: true,
+      trend: todaySteps ? `${Math.max(0, 10000 - Number(todaySteps.value))} to goal` : 'No data',
+      trendUp: todaySteps ? Number(todaySteps.value) > 8000 : false,
     },
     {
       id: 'heart-rate',
       title: 'Heart Rate',
-      value: '72 BPM',
+      value: heartRateData ? `${heartRateData.resting} BPM` : '--',
       subtitle: 'Resting',
       icon: Heart,
       color: '#EF4444',
       bgColor: '#FEF2F2',
-      trend: 'Normal range',
-      trendUp: true,
+      trend: heartRateData ? getHeartRateZone(heartRateData.resting).zone : 'No data',
+      trendUp: heartRateData ? heartRateData.resting >= 60 && heartRateData.resting <= 100 : false,
     },
     {
       id: 'hydration',
       title: 'Water Intake',
-      value: '1.2L',
+      value: currentHydration ? `${currentHydration.value}${currentHydration.unit}` : '--',
       subtitle: 'Today',
       icon: Droplets,
       color: '#06B6D4',
       bgColor: '#ECFEFF',
-      trend: '0.8L to goal',
-      trendUp: false,
+      trend: currentHydration ? `${Math.max(0, 2.0 - Number(currentHydration.value)).toFixed(1)}L to goal` : 'No data',
+      trendUp: currentHydration ? Number(currentHydration.value) >= 1.5 : false,
     },
   ];
 
@@ -178,11 +276,62 @@ function HealthMetricsContent() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <SafeAreaView style={responsiveStyles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading health data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!permissionsGranted) {
+    return (
+      <SafeAreaView style={responsiveStyles.container}>
+        <View style={styles.permissionContainer}>
+          <View style={styles.permissionIcon}>
+            <Shield size={64} color="#007AFF" strokeWidth={2} />
+          </View>
+          <Text style={styles.permissionTitle}>Health Data Access</Text>
+          <Text style={styles.permissionMessage}>
+            To provide personalized health insights, we need access to your health data.
+          </Text>
+          <Text style={styles.permissionNote}>
+            {Platform.OS === 'web' 
+              ? 'Currently showing demo data. Connect Apple Health or Google Fit for real data.'
+              : 'Your data is kept private and secure on your device.'
+            }
+          </Text>
+          <TouchableOpacity
+            style={styles.permissionButton}
+            onPress={requestPermissions}
+            activeOpacity={0.8}
+          >
+            <Smartphone size={20} color="#FFFFFF" strokeWidth={2} />
+            <Text style={styles.permissionButtonText}>
+              {Platform.OS === 'web' ? 'View Demo Data' : 'Grant Access'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={responsiveStyles.container}>
       <ScrollView 
         contentContainerStyle={responsiveStyles.content} 
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#007AFF']}
+            tintColor="#007AFF"
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -212,6 +361,12 @@ function HealthMetricsContent() {
           </View>
         </View>
 
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         {/* Today's Summary */}
         <View style={styles.summarySection}>
           <View style={styles.summaryCard}>
@@ -227,7 +382,9 @@ function HealthMetricsContent() {
                 </Text>
               </View>
               <View style={styles.summaryScore}>
-                <Text style={styles.scoreNumber}>85</Text>
+                <Text style={styles.scoreNumber}>
+                  {heartRateData && todaySteps && currentSleep ? '85' : '--'}
+                </Text>
                 <Text style={styles.scoreLabel}>Health Score</Text>
               </View>
             </View>
@@ -235,17 +392,23 @@ function HealthMetricsContent() {
             <View style={styles.summaryStats}>
               <View style={styles.summaryStatItem}>
                 <Heart size={16} color="#EF4444" strokeWidth={2} />
-                <Text style={styles.summaryStatValue}>72</Text>
+                <Text style={styles.summaryStatValue}>
+                  {heartRateData ? heartRateData.resting : '--'}
+                </Text>
                 <Text style={styles.summaryStatLabel}>BPM</Text>
               </View>
-              <View style={styles.summaryStats}>
+              <View style={styles.summaryStatItem}>
                 <Footprints size={16} color="#10B981" strokeWidth={2} />
-                <Text style={styles.summaryStatValue}>8.2K</Text>
+                <Text style={styles.summaryStatValue}>
+                  {todaySteps ? `${(Number(todaySteps.value) / 1000).toFixed(1)}K` : '--'}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Steps</Text>
               </View>
-              <View style={styles.summaryStats}>
+              <View style={styles.summaryStatItem}>
                 <Moon size={16} color="#6366F1" strokeWidth={2} />
-                <Text style={styles.summaryStatValue}>7h</Text>
+                <Text style={styles.summaryStatValue}>
+                  {currentSleep ? `${Math.floor(currentSleep.duration / 60)}h` : '--'}
+                </Text>
                 <Text style={styles.summaryStatLabel}>Sleep</Text>
               </View>
             </View>
@@ -461,6 +624,20 @@ function HealthMetricsContent() {
           </View>
         </View>
 
+        {/* Data Source Info */}
+        <View style={styles.dataSourceCard}>
+          <View style={styles.dataSourceHeader}>
+            <Smartphone size={20} color="#007AFF" strokeWidth={2} />
+            <Text style={styles.dataSourceTitle}>Data Source</Text>
+          </View>
+          <Text style={styles.dataSourceText}>
+            {Platform.OS === 'web' 
+              ? 'Currently displaying demo data. To view real health metrics, use the mobile app with Apple Health or Google Fit integration.'
+              : 'Health data syncs automatically from your device sensors and connected health apps.'
+            }
+          </Text>
+        </View>
+
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={[
@@ -469,7 +646,7 @@ function HealthMetricsContent() {
               fontSize: isLargeDesktop ? 14 : 13,
             }
           ]}>
-            Health data syncs automatically from your device
+            Your health data is private and secure
           </Text>
           <Text style={[
             styles.footerSubtext,
@@ -477,7 +654,7 @@ function HealthMetricsContent() {
               fontSize: isLargeDesktop ? 12 : 11,
             }
           ]}>
-            Connect Apple Health or Google Fit for comprehensive tracking
+            Data is processed locally on your device
           </Text>
         </View>
       </ScrollView>
@@ -505,6 +682,90 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 32,
     paddingBottom: 24,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  permissionIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F0F9FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 32,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  permissionTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionMessage: {
+    fontSize: 16,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  permissionNote: {
+    fontSize: 14,
+    color: '#8E8E93',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: 32,
+    paddingHorizontal: 20,
+  },
+  permissionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  permissionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  errorContainer: {
+    backgroundColor: '#FFEBEE',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF3B30',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '500',
   },
   header: {
     marginBottom: 24,
@@ -756,6 +1017,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  dataSourceCard: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  dataSourceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  dataSourceTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginLeft: 8,
+  },
+  dataSourceText: {
+    fontSize: 14,
+    color: '#007AFF',
+    lineHeight: 20,
   },
   footer: {
     alignItems: 'center',
