@@ -12,7 +12,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
-import { Users, Plus, Search, UserPlus, Calendar, Clock, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3 } from 'lucide-react-native';
+import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3 } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert } from '@/lib/supabaseService';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router } from 'expo-router';
@@ -20,14 +20,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 function ManagePatientsContent() {
   const [patients, setPatients] = useState<UserProfile[]>([]);
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isAddingPatient, setIsAddingPatient] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchEmail, setSearchEmail] = useState('');
-  const [showAddPatient, setShowAddPatient] = useState(false);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<UserProfile | null>(null);
   const [taskTitle, setTaskTitle] = useState('');
@@ -71,56 +66,6 @@ function ManagePatientsContent() {
       setError(err.message || 'Failed to load patients');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const searchPatients = async (email: string) => {
-    if (!email.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    try {
-      setIsSearching(true);
-      const results = await SupabaseService.searchUsersByEmail(email);
-      
-      // Filter out patients already in the provider's care
-      const existingPatientIds = patients.map(p => p.id);
-      const filteredResults = results.filter(user => !existingPatientIds.includes(user.id));
-      
-      setSearchResults(filteredResults);
-    } catch (err: any) {
-      console.error('Error searching patients:', err);
-      setError(err.message || 'Failed to search patients');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const addPatient = async (patient: UserProfile) => {
-    if (!currentProviderId) {
-      setError('Provider ID not found');
-      return;
-    }
-
-    try {
-      setIsAddingPatient(true);
-      await SupabaseService.addPatientToProvider(currentProviderId, patient.id);
-      
-      // Refresh the patients list
-      await loadPatients();
-      
-      // Clear search
-      setSearchEmail('');
-      setSearchResults([]);
-      setShowAddPatient(false);
-      
-      setError(null);
-    } catch (err: any) {
-      console.error('Error adding patient:', err);
-      setError(err.message || 'Failed to add patient');
-    } finally {
-      setIsAddingPatient(false);
     }
   };
 
@@ -253,7 +198,7 @@ function ManagePatientsContent() {
         input: {
           ...baseStyles.input,
           fontSize: isLargeDesktop ? 18 : 16,
-          paddingVertical: isLargeDesktop ? 18 : 16,
+          paddingVertical: isLargeDesktop ? 20 : 18,
         },
       };
     } else if (isWeb && isTablet) {
@@ -311,7 +256,7 @@ function ManagePatientsContent() {
               <View>
                 <Text style={responsiveStyles.title}>Manage Patients</Text>
                 <Text style={responsiveStyles.subtitle}>
-                  Add patients and create care tasks
+                  View your patients and create care tasks
                 </Text>
               </View>
             </View>
@@ -324,106 +269,21 @@ function ManagePatientsContent() {
           </View>
         )}
 
-        {/* Action Buttons */}
+        {/* Create Task Button */}
         <View style={styles.actionButtonsContainer}>
           <TouchableOpacity
             style={[responsiveStyles.actionButton, styles.primaryButton]}
-            onPress={() => setShowAddPatient(!showAddPatient)}
-            activeOpacity={0.7}
-          >
-            <UserPlus 
-              size={isWeb && isDesktop ? 24 : 20} 
-              color="#FFFFFF" 
-              strokeWidth={2} 
-            />
-            <Text style={styles.actionButtonText}>Add Patient</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[responsiveStyles.actionButton, styles.secondaryButton]}
             onPress={() => setShowCreateTask(!showCreateTask)}
             activeOpacity={0.7}
           >
             <Plus 
               size={isWeb && isDesktop ? 24 : 20} 
-              color="#007AFF" 
+              color="#FFFFFF" 
               strokeWidth={2} 
             />
-            <Text style={styles.secondaryButtonText}>Create Task</Text>
+            <Text style={styles.actionButtonText}>Create Task</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Add Patient Section */}
-        {showAddPatient && (
-          <View style={styles.section}>
-            <Text style={responsiveStyles.sectionTitle}>Add New Patient</Text>
-            
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputContainer}>
-                <Search 
-                  size={isWeb && isDesktop ? 22 : 20} 
-                  color="#8E8E93" 
-                  strokeWidth={2} 
-                />
-                <TextInput
-                  style={responsiveStyles.input}
-                  placeholder="Search by email address"
-                  placeholderTextColor="#8E8E93"
-                  value={searchEmail}
-                  onChangeText={(text) => {
-                    setSearchEmail(text);
-                    searchPatients(text);
-                  }}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {isSearching && (
-                  <ActivityIndicator size="small" color="#007AFF" />
-                )}
-              </View>
-            </View>
-
-            {searchResults.length > 0 && (
-              <View style={styles.searchResults}>
-                {searchResults.map((user) => (
-                  <TouchableOpacity
-                    key={user.id}
-                    style={styles.searchResultItem}
-                    onPress={() => addPatient(user)}
-                    disabled={isAddingPatient}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.userInfo}>
-                      <View style={styles.userAvatar}>
-                        <User 
-                          size={isWeb && isDesktop ? 24 : 20} 
-                          color="#007AFF" 
-                          strokeWidth={2} 
-                        />
-                      </View>
-                      <View style={styles.userDetails}>
-                        <Text style={styles.userName}>
-                          {user.full_name || user.username || 'Unknown User'}
-                        </Text>
-                        <Text style={styles.userEmail}>{user.email}</Text>
-                      </View>
-                    </View>
-                    {isAddingPatient ? (
-                      <ActivityIndicator size="small" color="#007AFF" />
-                    ) : (
-                      <Plus 
-                        size={isWeb && isDesktop ? 24 : 20} 
-                        color="#007AFF" 
-                        strokeWidth={2} 
-                      />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
 
         {/* Create Task Section */}
         {showCreateTask && (
@@ -530,9 +390,9 @@ function ManagePatientsContent() {
                   strokeWidth={1.5} 
                 />
               </View>
-              <Text style={styles.emptyStateTitle}>No patients yet</Text>
+              <Text style={styles.emptyStateTitle}>No patients assigned</Text>
               <Text style={styles.emptyStateSubtitle}>
-                Add patients to start managing their care tasks
+                Patients will be added to your care list by your healthcare organization
               </Text>
             </View>
           ) : (
@@ -691,12 +551,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   actionButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
     marginBottom: 24,
   },
   actionButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -707,11 +564,6 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: '#007AFF',
   },
-  secondaryButton: {
-    backgroundColor: '#F0F9FF',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
   disabledButton: {
     backgroundColor: '#8E8E93',
   },
@@ -719,12 +571,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginLeft: 8,
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007AFF',
     marginLeft: 8,
   },
   section: {
@@ -735,76 +581,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 16,
-  },
-  searchContainer: {
-    marginBottom: 16,
-  },
-  searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: '#1C1C1E',
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    fontWeight: '500',
-  },
-  searchResults: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  searchResultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F9FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  userDetails: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1C1C1E',
-    marginBottom: 2,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: '#8E8E93',
   },
   formGroup: {
     marginBottom: 20,
@@ -848,6 +624,22 @@ const styles = StyleSheet.create({
   },
   patientSelectorTextSelected: {
     color: '#FFFFFF',
+  },
+  input: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    fontSize: 16,
+    color: '#1C1C1E',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+    fontWeight: '500',
   },
   emptyState: {
     alignItems: 'center',
