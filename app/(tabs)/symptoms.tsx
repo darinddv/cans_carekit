@@ -14,28 +14,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import {
-  Activity,
-  Plus,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  Calendar,
-  Clock,
-  Target,
-  BarChart3,
-  Edit3,
-  Trash2,
-  X,
-  Check,
-  AlertCircle,
-  Heart,
-  Zap,
-  Battery,
-  Moon,
-  Users,
-  Utensils,
-} from 'lucide-react-native';
+import { Activity, Plus, TrendingUp, TrendingDown, Minus, Calendar, Clock, Target, ChartBar as BarChart3, CreditCard as Edit3, Trash2, X, Check, CircleAlert as AlertCircle, Heart, Zap, Battery, Moon, Users, Utensils } from 'lucide-react-native';
 import { RoleGuard } from '@/components/RoleGuard';
 import {
   SymptomService,
