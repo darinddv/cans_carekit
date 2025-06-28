@@ -127,11 +127,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="connect"
+        name="health-metrics"
         options={{
-          title: 'Connect',
+          title: 'Health',
           tabBarIcon: ({ size, color }) => (
-            <Users 
+            <Activity 
               size={isWeb && isDesktop ? size + 2 : size} 
               color={color} 
               strokeWidth={2} 
@@ -162,6 +162,14 @@ export default function TabLayout() {
       {/* Hide the old profile tab since index is now profile */}
       <Tabs.Screen
         name="profile"
+        options={{
+          href: null, // This completely hides the tab
+        }}
+      />
+
+      {/* Hide the old connect tab since it's now health-metrics */}
+      <Tabs.Screen
+        name="connect"
         options={{
           href: null, // This completely hides the tab
         }}
