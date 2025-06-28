@@ -13,7 +13,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3, ChevronDown, Check, Search, X, Edit3 } from 'lucide-react-native';
+import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3, ChevronDown, Check, Search, X, CreditCard as Edit3 } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert, CareTask } from '@/lib/supabaseService';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router } from 'expo-router';
