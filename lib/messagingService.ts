@@ -151,6 +151,12 @@ export class MessagingService {
         const isCurrentUserSender = message.sender_id === user.id;
         const participant = isCurrentUserSender ? message.receiver : message.sender;
         
+        // Add null check for participant
+        if (!participant || !participant.id) {
+          console.warn('Skipping message with null participant:', message.id);
+          return;
+        }
+
         if (!conversationMap.has(participant.id)) {
           conversationMap.set(participant.id, {
             participant,
