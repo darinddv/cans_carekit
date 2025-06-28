@@ -98,10 +98,28 @@ export default function MessagesScreen() {
       setIsLoadingConversations(true);
       setError(null);
       
+      // DEBUG: Log current user profile ID
+      console.log('🔍 [DEBUG] Current user profile ID:', userProfile?.id);
+      console.log('🔍 [DEBUG] Current user email:', userProfile?.email);
+      console.log('🔍 [DEBUG] Current user role:', userProfile?.role);
+      
       const conversationsList = await MessagingService.getConversations();
       setConversations(conversationsList);
+      
+      // DEBUG: Log conversations loaded
+      console.log('🔍 [DEBUG] Conversations loaded:', conversationsList.length);
+      conversationsList.forEach((conv, index) => {
+        console.log(`🔍 [DEBUG] Conversation ${index}:`, {
+          participantId: conv.participant.id,
+          participantEmail: conv.participant.email,
+          lastMessageId: conv.lastMessage?.id,
+          lastMessageSender: conv.lastMessage?.sender_id,
+          lastMessageReceiver: conv.lastMessage?.receiver_id,
+          unreadCount: conv.unreadCount,
+        });
+      });
     } catch (err: any) {
-      console.error('Error loading conversations:', err);
+      console.error('❌ [ERROR] Loading conversations:', err);
       setError(err.message || 'Failed to load conversations');
     } finally {
       setIsLoadingConversations(false);
@@ -110,18 +128,28 @@ export default function MessagesScreen() {
 
   const openConversationById = async (userId: string) => {
     try {
+      console.log('🔍 [DEBUG] Opening conversation with user ID:', userId);
+      
       // Find existing conversation or create a new one
       let conversation = conversations.find(c => c.participant.id === userId);
       
       if (!conversation) {
+        console.log('🔍 [DEBUG] Conversation not found in list, fetching user profile...');
         // Fetch user profile for new conversation
         const userProfile = await SupabaseService.fetchUserProfile(userId);
         if (userProfile) {
+          console.log('🔍 [DEBUG] User profile fetched:', {
+            id: userProfile.id,
+            email: userProfile.email,
+            role: userProfile.role,
+          });
           conversation = {
             participant: userProfile,
             lastMessage: null,
             unreadCount: 0,
           };
+        } else {
+          console.log('❌ [ERROR] User profile not found for ID:', userId);
         }
       }
       
@@ -129,13 +157,19 @@ export default function MessagesScreen() {
         openConversation(conversation);
       }
     } catch (err: any) {
-      console.error('Error opening conversation:', err);
+      console.error('❌ [ERROR] Opening conversation:', err);
       setError(err.message || 'Failed to open conversation');
     }
   };
 
   const openConversation = async (conversation: Conversation) => {
     try {
+      console.log('🔍 [DEBUG] Opening conversation with:', {
+        participantId: conversation.participant.id,
+        participantEmail: conversation.participant.email,
+        currentUserId: userProfile?.id,
+      });
+      
       setSelectedConversation(conversation);
       setIsLoadingMessages(true);
       setError(null);
@@ -143,14 +177,29 @@ export default function MessagesScreen() {
       const conversationMessages = await MessagingService.getConversation(conversation.participant.id);
       setMessages(conversationMessages);
       
+      // DEBUG: Log messages loaded
+      console.log('🔍 [DEBUG] Messages loaded for conversation:', conversationMessages.length);
+      conversationMessages.forEach((msg, index) => {
+        console.log(`🔍 [DEBUG] Message ${index}:`, {
+          id: msg.id,
+          senderId: msg.sender_id,
+          receiverId: msg.receiver_id,
+          content: msg.content.substring(0, 50) + '...',
+          createdAt: msg.created_at,
+          readAt: msg.read_at,
+          senderEmail: msg.sender?.email,
+        });
+      });
+      
       // Mark messages as read
       if (conversation.unreadCount > 0) {
+        console.log('🔍 [DEBUG] Marking messages as read from:', conversation.participant.id);
         await MessagingService.markMessagesAsRead(conversation.participant.id);
         // Refresh conversations to update unread count
         loadConversations();
       }
     } catch (err: any) {
-      console.error('Error loading conversation:', err);
+      console.error('❌ [ERROR] Loading conversation:', err);
       setError(err.message || 'Failed to load conversation');
     } finally {
       setIsLoadingMessages(false);
@@ -163,10 +212,22 @@ export default function MessagesScreen() {
     try {
       setIsSending(true);
       
+      console.log('🔍 [DEBUG] Sending message:', {
+        to: selectedConversation.participant.id,
+        from: userProfile?.id,
+        content: newMessage.trim().substring(0, 50) + '...',
+      });
+      
       const message = await MessagingService.sendMessage(
         selectedConversation.participant.id,
         newMessage.trim()
       );
+      
+      console.log('🔍 [DEBUG] Message sent successfully:', {
+        messageId: message.id,
+        senderId: message.sender_id,
+        receiverId: message.receiver_id,
+      });
       
       // Add message to local state with sender info
       const messageWithSender: MessageWithSender = {
@@ -186,7 +247,7 @@ export default function MessagesScreen() {
       // Refresh conversations to update last message
       loadConversations();
     } catch (err: any) {
-      console.error('Error sending message:', err);
+      console.error('❌ [ERROR] Sending message:', err);
       setError(err.message || 'Failed to send message');
     } finally {
       setIsSending(false);
@@ -201,7 +262,18 @@ export default function MessagesScreen() {
 
     try {
       setIsSearching(true);
+      console.log('🔍 [DEBUG] Searching users with query:', query);
+      
       const results = await SupabaseService.searchUsersByEmail(query);
+      
+      console.log('🔍 [DEBUG] Search results:', results.length);
+      results.forEach((user, index) => {
+        console.log(`🔍 [DEBUG] Search result ${index}:`, {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        });
+      });
       
       // Filter out current user and existing conversations
       const existingUserIds = conversations.map(c => c.participant.id);
@@ -209,9 +281,10 @@ export default function MessagesScreen() {
         user => user.id !== userProfile?.id && !existingUserIds.includes(user.id)
       );
       
+      console.log('🔍 [DEBUG] Filtered search results:', filteredResults.length);
       setSearchResults(filteredResults);
     } catch (err: any) {
-      console.error('Error searching users:', err);
+      console.error('❌ [ERROR] Searching users:', err);
       setError(err.message || 'Failed to search users');
     } finally {
       setIsSearching(false);
@@ -219,6 +292,12 @@ export default function MessagesScreen() {
   };
 
   const startNewConversation = (user: UserProfile) => {
+    console.log('🔍 [DEBUG] Starting new conversation with:', {
+      userId: user.id,
+      userEmail: user.email,
+      userRole: user.role,
+    });
+    
     const newConversation: Conversation = {
       participant: user,
       lastMessage: null,
@@ -235,12 +314,14 @@ export default function MessagesScreen() {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
+      console.log('🔍 [DEBUG] Refreshing conversations and messages...');
       await loadConversations();
       if (selectedConversation) {
         const conversationMessages = await MessagingService.getConversation(selectedConversation.participant.id);
         setMessages(conversationMessages);
       }
     } catch (err: any) {
+      console.error('❌ [ERROR] Refreshing:', err);
       setError(err.message || 'Failed to refresh');
     } finally {
       setIsRefreshing(false);
