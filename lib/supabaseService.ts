@@ -240,6 +240,35 @@ export class SupabaseService {
     }
   }
 
+  // Fetch tasks for a specific patient (used by providers)
+  static async fetchTasksForPatient(patientId: string): Promise<CareTask[]> {
+    try {
+      console.log('Fetching tasks for patient:', patientId);
+      
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', patientId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Fetch patient tasks error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        throw error;
+      }
+
+      console.log('Patient tasks fetched successfully, count:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('Fetch patient tasks exception:', error);
+      throw error;
+    }
+  }
+
   // Upsert (insert or update) a task using Supabase's native upsert
   static async upsertTask(task: CareTask): Promise<CareTask> {
     try {
@@ -266,7 +295,7 @@ export class SupabaseService {
         title: task.title,
         time: task.time,
         completed: task.completed,
-        user_id: user.id,
+        user_id: task.user_id || user.id,
         updated_at: new Date().toISOString(),
       };
 
@@ -323,7 +352,7 @@ export class SupabaseService {
         title: task.title,
         time: task.time,
         completed: task.completed,
-        user_id: user.id,
+        user_id: task.user_id || user.id,
         updated_at: new Date().toISOString(),
       }));
 
@@ -376,8 +405,7 @@ export class SupabaseService {
       const { error } = await supabase
         .from('tasks')
         .delete()
-        .eq('id', taskId)
-        .eq('user_id', user.id);
+        .eq('id', taskId);
 
       if (error) {
         console.error('Delete task error details:', {
