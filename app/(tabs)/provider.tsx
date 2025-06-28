@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, SafeAreaView, Dimensions, Platform, ScrollView, TouchableOpacity } from 'react-native';
-import { Briefcase, Users, Calendar, ChartBar as BarChart3, MessageSquare, Shield, Clock, TrendingUp, UserPlus, Plus } from 'lucide-react-native';
+import { Briefcase, Users, Calendar, ChartBar as BarChart3, MessageSquare, Shield, Clock, TrendingUp, UserPlus } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router } from 'expo-router';
@@ -159,14 +159,6 @@ function ProviderContent() {
       description: 'Add new patients and create care tasks',
       color: '#007AFF',
       bgColor: '#F0F9FF',
-      onPress: () => router.push('/(tabs)/provider/manage-patients'),
-    },
-    {
-      icon: Plus,
-      title: 'Quick Task',
-      description: 'Create a task for existing patients',
-      color: '#34C759',
-      bgColor: '#F0FDF4',
       onPress: () => router.push('/(tabs)/provider/manage-patients'),
     },
   ];
