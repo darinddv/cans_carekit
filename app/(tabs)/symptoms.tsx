@@ -14,7 +14,7 @@ import {
   Modal,
   Alert,
 } from 'react-native';
-import { Activity, Plus, TrendingUp, TrendingDown, Minus, Calendar, Clock, Target, ChartBar as BarChart3, CreditCard as Edit3, Trash2, X, Check, CircleAlert as AlertCircle, Heart, Zap, Battery, Moon, Users, Utensils } from 'lucide-react-native';
+import { Activity, Plus, TrendingUp, TrendingDown, Minus, Calendar, Clock, Target, ChartBar as BarChart3, CreditCard as Edit3, Trash2, X, Check, CircleAlert as AlertCircle, Heart, Zap, Battery, Moon, Users, Utensils, TestTube } from 'lucide-react-native';
 import { RoleGuard } from '@/components/RoleGuard';
 import {
   SymptomService,
@@ -23,6 +23,7 @@ import {
   SymptomTrend,
   AssessmentTemplate,
 } from '@/lib/symptomService';
+import { NotificationService } from '@/lib/notificationService';
 
 // Icon mapping for symptom categories
 const categoryIcons: Record<string, any> = {
@@ -51,6 +52,7 @@ function SymptomsContent() {
   // UI state
   const [showLogModal, setShowLogModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [showTestModal, setShowTestModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<SymptomCategory | null>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentTemplate | null>(null);
   
@@ -61,6 +63,10 @@ function SymptomsContent() {
   const [selectedCoping, setSelectedCoping] = useState<string[]>([]);
   const [customTrigger, setCustomTrigger] = useState('');
   const [customCoping, setCustomCoping] = useState('');
+
+  // Testing state
+  const [testResults, setTestResults] = useState<Record<string, any>>({});
+  const [isRunningTests, setIsRunningTests] = useState(false);
 
   // Common triggers and coping strategies
   const commonTriggers = [
@@ -179,6 +185,191 @@ function SymptomsContent() {
         ? prev.filter(c => c !== coping)
         : [...prev, coping]
     );
+  };
+
+  // Testing functions
+  const runNotificationTests = async () => {
+    const results: Record<string, any> = {};
+    
+    try {
+      console.log('🧪 Testing Notifications...');
+      
+      // Test 1: Permission Request
+      const hasPermissions = await NotificationService.requestPermissions();
+      results.permissions = hasPermissions;
+      console.log('✅ Permissions:', hasPermissions ? 'Granted' : 'Denied');
+      
+      if (Platform.OS !== 'web') {
+        // Test 2: Schedule Daily Reminder
+        const dailyId = await NotificationService.scheduleDailyMoodCheck(9, 0);
+        results.dailyScheduled = !!dailyId;
+        console.log('✅ Daily reminder scheduled:', dailyId);
+        
+        // Test 3: Schedule Weekly Assessment
+        const weeklyId = await NotificationService.scheduleWeeklyAssessment(1, 10);
+        results.weeklyScheduled = !!weeklyId;
+        console.log('✅ Weekly assessment scheduled:', weeklyId);
+        
+        // Test 4: Get Scheduled Notifications
+        const scheduled = await NotificationService.getScheduledNotifications();
+        results.totalScheduled = scheduled.length;
+        console.log('✅ Scheduled notifications:', scheduled.length);
+        
+        // Test 5: Send immediate test notification
+        try {
+          await NotificationService.sendImmediateNotification(
+            '🧪 Test Notification',
+            'This is a test notification from the symptom tracker!'
+          );
+          results.immediateNotification = true;
+          console.log('✅ Immediate notification sent');
+        } catch (error) {
+          results.immediateNotification = false;
+          console.log('❌ Immediate notification failed:', error);
+        }
+        
+        // Cleanup - cancel test notifications after 5 seconds
+        setTimeout(async () => {
+          await NotificationService.cancelAllNotifications();
+          console.log('🧹 Test notifications cleaned up');
+        }, 5000);
+      } else {
+        results.webLimitation = 'Notifications not supported on web platform';
+        console.log('ℹ️ Web platform - notifications not supported');
+      }
+      
+    } catch (error) {
+      results.error = error.message;
+      console.error('❌ Notification tests failed:', error);
+    }
+    
+    return results;
+  };
+
+  const runAssessmentTests = async () => {
+    const results: Record<string, any> = {};
+    
+    try {
+      console.log('🧪 Testing Assessments...');
+      
+      // Test 1: Fetch Templates
+      const templates = await SymptomService.getAssessmentTemplates();
+      results.templatesLoaded = templates.length;
+      console.log('✅ Templates loaded:', templates.length);
+      
+      if (templates.length > 0) {
+        // Test 2: Submit Test Response
+        const testResponses = {
+          mood: 7,
+          energy: 6,
+          stress: 4
+        };
+        
+        const response = await SymptomService.submitAssessmentResponse(
+          templates[0].id,
+          testResponses
+        );
+        results.responseSubmitted = !!response.id;
+        results.calculatedScore = response.score;
+        console.log('✅ Assessment submitted:', response.id, 'Score:', response.score);
+        
+        // Test 3: Fetch Responses
+        const responses = await SymptomService.getAssessmentResponses(7);
+        results.responsesFetched = responses.length;
+        console.log('✅ Responses fetched:', responses.length);
+      }
+      
+    } catch (error) {
+      results.error = error.message;
+      console.error('❌ Assessment tests failed:', error);
+    }
+    
+    return results;
+  };
+
+  const runSymptomTests = async () => {
+    const results: Record<string, any> = {};
+    
+    try {
+      console.log('🧪 Testing Symptom Logging...');
+      
+      // Test 1: Get Categories
+      const categories = await SymptomService.getSymptomCategories();
+      results.categoriesLoaded = categories.length;
+      console.log('✅ Categories loaded:', categories.length);
+      
+      if (categories.length > 0) {
+        // Test 2: Log Test Symptom
+        const testLog = await SymptomService.logSymptom({
+          category_id: categories[0].id,
+          severity: 6,
+          notes: 'Test symptom log from automated testing',
+          triggers: ['Stress', 'Testing'],
+          coping_strategies: ['Deep breathing', 'Testing']
+        });
+        results.symptomLogged = !!testLog.id;
+        console.log('✅ Symptom logged:', testLog.id);
+        
+        // Test 3: Fetch Recent Logs
+        const logs = await SymptomService.getSymptomLogs(7);
+        results.logsFetched = logs.length;
+        console.log('✅ Logs fetched:', logs.length);
+        
+        // Test 4: Calculate Trends
+        const trends = await SymptomService.getSymptomTrends(30);
+        results.trendsCalculated = trends.length;
+        console.log('✅ Trends calculated:', trends.length);
+        
+        // Test 5: Get Common Triggers/Coping
+        const commonTriggers = await SymptomService.getCommonTriggers();
+        const commonCoping = await SymptomService.getCommonCopingStrategies();
+        results.commonTriggersFound = commonTriggers.length;
+        results.commonCopingFound = commonCoping.length;
+        console.log('✅ Common patterns found - Triggers:', commonTriggers.length, 'Coping:', commonCoping.length);
+      }
+      
+    } catch (error) {
+      results.error = error.message;
+      console.error('❌ Symptom tests failed:', error);
+    }
+    
+    return results;
+  };
+
+  const runAllTests = async () => {
+    setIsRunningTests(true);
+    setTestResults({});
+    
+    try {
+      console.log('🚀 Starting Comprehensive Test Suite...');
+      
+      const [notificationResults, assessmentResults, symptomResults] = await Promise.all([
+        runNotificationTests(),
+        runAssessmentTests(),
+        runSymptomTests()
+      ]);
+      
+      const allResults = {
+        notifications: notificationResults,
+        assessments: assessmentResults,
+        symptoms: symptomResults,
+        timestamp: new Date().toISOString(),
+        platform: Platform.OS,
+        environment: __DEV__ ? 'development' : 'production'
+      };
+      
+      setTestResults(allResults);
+      console.log('🎉 All tests completed!', allResults);
+      
+      // Refresh data after tests
+      await loadData();
+      
+    } catch (error) {
+      console.error('💥 Test suite failed:', error);
+      setTestResults({ error: error.message });
+    } finally {
+      setIsRunningTests(false);
+    }
   };
 
   const getSeverityColor = (severity: number): string => {
@@ -320,6 +511,14 @@ function SymptomsContent() {
                 </Text>
               </View>
             </View>
+            {/* Test Button */}
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={() => setShowTestModal(true)}
+              activeOpacity={0.7}
+            >
+              <TestTube size={20} color="#8B5CF6" strokeWidth={2} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -709,6 +908,76 @@ function SymptomsContent() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Test Modal */}
+      <Modal
+        visible={showTestModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTestModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowTestModal(false)}>
+              <X size={24} color="#8E8E93" strokeWidth={2} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Feature Testing</Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.testSection}>
+              <Text style={styles.testSectionTitle}>🧪 Test Suite</Text>
+              <Text style={styles.testSectionDescription}>
+                Run comprehensive tests for notifications, assessments, and symptom logging.
+              </Text>
+              
+              <TouchableOpacity
+                style={[styles.testRunButton, isRunningTests && styles.testRunButtonDisabled]}
+                onPress={runAllTests}
+                disabled={isRunningTests}
+                activeOpacity={0.7}
+              >
+                {isRunningTests ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <TestTube size={20} color="#FFFFFF" strokeWidth={2} />
+                )}
+                <Text style={styles.testRunButtonText}>
+                  {isRunningTests ? 'Running Tests...' : 'Run All Tests'}
+                </Text>
+              </TouchableOpacity>
+
+              {Object.keys(testResults).length > 0 && (
+                <View style={styles.testResults}>
+                  <Text style={styles.testResultsTitle}>Test Results</Text>
+                  <ScrollView style={styles.testResultsScroll}>
+                    <Text style={styles.testResultsText}>
+                      {JSON.stringify(testResults, null, 2)}
+                    </Text>
+                  </ScrollView>
+                </View>
+              )}
+
+              <View style={styles.testInfo}>
+                <Text style={styles.testInfoTitle}>Testing Information</Text>
+                <Text style={styles.testInfoText}>
+                  • <Text style={styles.testInfoBold}>Notifications:</Text> {Platform.OS === 'web' ? 'Limited on web - use mobile device for full testing' : 'Full testing available on mobile'}
+                </Text>
+                <Text style={styles.testInfoText}>
+                  • <Text style={styles.testInfoBold}>Assessments:</Text> Fully functional in all environments
+                </Text>
+                <Text style={styles.testInfoText}>
+                  • <Text style={styles.testInfoBold}>Symptom Logging:</Text> Fully functional with database integration
+                </Text>
+                <Text style={styles.testInfoText}>
+                  • <Text style={styles.testInfoBold}>Platform:</Text> {Platform.OS} ({__DEV__ ? 'development' : 'production'})
+                </Text>
+              </View>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -767,11 +1036,15 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   iconContainer: {
     width: 60,
@@ -794,6 +1067,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8E8E93',
     lineHeight: 22,
+  },
+  testButton: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#F3F0FF',
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
   },
   section: {
     marginBottom: 32,
@@ -1202,5 +1482,84 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     borderWidth: 1,
     borderColor: '#E5E5EA',
+  },
+  testSection: {
+    padding: 20,
+  },
+  testSectionTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 8,
+  },
+  testSectionDescription: {
+    fontSize: 16,
+    color: '#8E8E93',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  testRunButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8B5CF6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  testRunButtonDisabled: {
+    backgroundColor: '#8E8E93',
+  },
+  testRunButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  testResults: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  testResultsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1C1C1E',
+    marginBottom: 12,
+  },
+  testResultsScroll: {
+    maxHeight: 200,
+  },
+  testResultsText: {
+    fontSize: 12,
+    color: '#1C1C1E',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+  },
+  testInfo: {
+    backgroundColor: '#F0F9FF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  testInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 12,
+  },
+  testInfoText: {
+    fontSize: 14,
+    color: '#007AFF',
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  testInfoBold: {
+    fontWeight: '600',
   },
 });
