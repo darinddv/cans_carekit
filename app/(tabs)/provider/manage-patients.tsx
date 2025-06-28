@@ -24,6 +24,8 @@ import {
   Heart,
   Mail,
   User,
+  Activity,
+  BarChart3,
 } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert } from '@/lib/supabaseService';
 import { RoleGuard } from '@/components/RoleGuard';
@@ -205,6 +207,17 @@ function ManagePatientsContent() {
     } finally {
       setIsCreatingTask(false);
     }
+  };
+
+  const viewPatientSymptoms = (patient: UserProfile) => {
+    router.push({
+      pathname: '/(tabs)/provider/patient-symptoms',
+      params: {
+        patientId: patient.id,
+        patientName: patient.full_name || patient.username || 'Patient',
+        patientEmail: patient.email,
+      },
+    });
   };
 
   const isWeb = Platform.OS === 'web';
@@ -567,7 +580,32 @@ function ManagePatientsContent() {
                   </View>
                   <View style={styles.patientActions}>
                     <TouchableOpacity
-                      style={styles.removeButton}
+                      style={[
+                        styles.actionIconButton,
+                        styles.viewLogsButton,
+                        isWeb && isDesktop && {
+                          padding: 12,
+                          borderRadius: 12,
+                        }
+                      ]}
+                      onPress={() => viewPatientSymptoms(patient)}
+                      activeOpacity={0.7}
+                    >
+                      <Activity 
+                        size={isWeb && isDesktop ? 20 : 18} 
+                        color="#007AFF" 
+                        strokeWidth={2} 
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.actionIconButton,
+                        styles.removeButton,
+                        isWeb && isDesktop && {
+                          padding: 12,
+                          borderRadius: 12,
+                        }
+                      ]}
                       onPress={() => removePatient(patient)}
                       activeOpacity={0.7}
                     >
@@ -911,10 +949,16 @@ const styles = StyleSheet.create({
   patientActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  actionIconButton: {
+    padding: 10,
+    borderRadius: 10,
+  },
+  viewLogsButton: {
+    backgroundColor: '#F0F9FF',
   },
   removeButton: {
-    padding: 8,
-    borderRadius: 8,
     backgroundColor: '#FFEBEE',
   },
 });

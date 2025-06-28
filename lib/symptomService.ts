@@ -132,6 +132,99 @@ export class SymptomService {
     }
   }
 
+  // Get symptom logs for a specific patient (used by providers)
+  static async getSymptomLogsForPatient(patientId: string, days: number = 30): Promise<SymptomLogWithCategory[]> {
+    try {
+      console.log(`Fetching symptom logs for patient ${patientId} for ${days} days...`);
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        throw new Error('User not authenticated');
+      }
+
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+
+      const { data, error } = await supabase
+        .from('symptom_logs')
+        .select(`
+          *,
+          category:symptom_categories(*)
+        `)
+        .eq('user_id', patientId)
+        .gte('logged_at', startDate.toISOString())
+        .order('logged_at', { ascending: false });
+
+      if (error) {
+        console.error('Fetch patient symptom logs error:', error);
+        throw error;
+      }
+
+      console.log('Patient symptom logs fetched successfully:', data?.length || 0);
+      return data || [];
+    } catch (error) {
+      console.error('Fetch patient symptom logs exception:', error);
+      throw error;
+    }
+  }
+
+  // Get symptom trends for a specific patient (used by providers)
+  static async getSymptomTrendsForPatient(patientId: string, days: number = 30): Promise<SymptomTrend[]> {
+    try {
+      console.log(`Calculating symptom trends for patient ${patientId} for ${days} days...`);
+      
+      const logs = await this.getSymptomLogsForPatient(patientId, days);
+      const categories = await this.getSymptomCategories();
+      
+      const trends: SymptomTrend[] = [];
+
+      for (const category of categories) {
+        const categoryLogs = logs.filter(log => log.category_id === category.id);
+        
+        if (categoryLogs.length === 0) continue;
+
+        // Calculate average severity
+        const averageSeverity = categoryLogs.reduce((sum, log) => sum + log.severity, 0) / categoryLogs.length;
+
+        // Calculate trend (compare first half vs second half of period)
+        const midPoint = Math.floor(categoryLogs.length / 2);
+        const recentLogs = categoryLogs.slice(0, midPoint);
+        const olderLogs = categoryLogs.slice(midPoint);
+
+        let trend: 'improving' | 'stable' | 'worsening' = 'stable';
+        let changePercent = 0;
+
+        if (recentLogs.length > 0 && olderLogs.length > 0) {
+          const recentAvg = recentLogs.reduce((sum, log) => sum + log.severity, 0) / recentLogs.length;
+          const olderAvg = olderLogs.reduce((sum, log) => sum + log.severity, 0) / olderLogs.length;
+          
+          changePercent = ((recentAvg - olderAvg) / olderAvg) * 100;
+          
+          if (changePercent > 10) {
+            trend = 'worsening';
+          } else if (changePercent < -10) {
+            trend = 'improving';
+          }
+        }
+
+        trends.push({
+          category: category.name,
+          averageSeverity,
+          trend,
+          changePercent,
+          logs: categoryLogs,
+        });
+      }
+
+      console.log('Patient symptom trends calculated successfully:', trends.length);
+      return trends;
+    } catch (error) {
+      console.error('Get patient symptom trends exception:', error);
+      throw error;
+    }
+  }
+
   // Update a symptom log
   static async updateSymptomLog(id: string, updates: SymptomLogUpdate): Promise<SymptomLog> {
     try {
