@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Platform, Dimensions, View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase, User } from 'lucide-react-native';
+import { Heart, Activity, ChartBar as BarChart3, Users, Briefcase, User, MessageCircle } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useUser } from '@/contexts/UserContext';
 
@@ -139,6 +139,21 @@ export default function TabLayout() {
           ),
           // Hide for providers
           href: isPatient ? undefined : null,
+        }}
+      />
+
+      {/* Messages Tab - Visible to both patients and providers */}
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: 'Messages',
+          tabBarIcon: ({ size, color }) => (
+            <MessageCircle 
+              size={isWeb && isDesktop ? size + 2 : size} 
+              color={color} 
+              strokeWidth={2} 
+            />
+          ),
         }}
       />
 
