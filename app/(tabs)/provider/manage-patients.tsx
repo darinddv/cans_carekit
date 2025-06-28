@@ -475,6 +475,7 @@ function ManagePatientsContent() {
                       style={[
                         styles.actionIconButton,
                         styles.viewLogsButton,
+                        { marginRight: 8 },
                         isWeb && isDesktop && {
                           padding: 12,
                           borderRadius: 12,
@@ -928,7 +929,6 @@ const styles = StyleSheet.create({
   patientActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   actionIconButton: {
     padding: 10,
