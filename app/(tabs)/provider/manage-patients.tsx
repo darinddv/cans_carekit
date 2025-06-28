@@ -13,7 +13,7 @@ import {
   Alert,
   Modal,
 } from 'react-native';
-import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3, ChevronDown, Check } from 'lucide-react-native';
+import { Users, Plus, Calendar, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3, ChevronDown, Check, Search, X } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert } from '@/lib/supabaseService';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router } from 'expo-router';
@@ -21,12 +21,14 @@ import { v4 as uuidv4 } from 'uuid';
 
 function ManagePatientsContent() {
   const [patients, setPatients] = useState<UserProfile[]>([]);
+  const [filteredPatients, setFilteredPatients] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<UserProfile | null>(null);
   const [showPatientPicker, setShowPatientPicker] = useState(false);
+  const [patientSearchQuery, setPatientSearchQuery] = useState('');
   const [taskTitle, setTaskTitle] = useState('');
   const [taskTime, setTaskTime] = useState('');
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
@@ -43,6 +45,21 @@ function ManagePatientsContent() {
   useEffect(() => {
     loadPatients();
   }, []);
+
+  // Filter patients based on search query
+  useEffect(() => {
+    if (!patientSearchQuery.trim()) {
+      setFilteredPatients(patients);
+    } else {
+      const query = patientSearchQuery.toLowerCase();
+      const filtered = patients.filter(patient => {
+        const name = getDisplayName(patient).toLowerCase();
+        const email = patient.email.toLowerCase();
+        return name.includes(query) || email.includes(query);
+      });
+      setFilteredPatients(filtered);
+    }
+  }, [patientSearchQuery, patients]);
 
   const loadPatients = async () => {
     try {
@@ -63,6 +80,7 @@ function ManagePatientsContent() {
       setCurrentProviderId(userProfile.id);
       const patientList = await SupabaseService.getPatientsForProvider(userProfile.id);
       setPatients(patientList);
+      setFilteredPatients(patientList);
     } catch (err: any) {
       console.error('Error loading patients:', err);
       setError(err.message || 'Failed to load patients');
@@ -132,6 +150,7 @@ function ManagePatientsContent() {
       setTaskTime('');
       setSelectedPatient(null);
       setShowCreateTask(false);
+      setPatientSearchQuery('');
       setError(null);
       
     } catch (err: any) {
@@ -156,6 +175,11 @@ function ManagePatientsContent() {
   const selectPatient = (patient: UserProfile) => {
     setSelectedPatient(patient);
     setShowPatientPicker(false);
+    setPatientSearchQuery('');
+  };
+
+  const clearPatientSearch = () => {
+    setPatientSearchQuery('');
   };
 
   const getDisplayName = (patient: UserProfile) => {
@@ -491,17 +515,23 @@ function ManagePatientsContent() {
         </View>
       </ScrollView>
 
-      {/* Patient Picker Modal */}
+      {/* Patient Picker Modal with Search */}
       <Modal
         visible={showPatientPicker}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowPatientPicker(false)}
+        onRequestClose={() => {
+          setShowPatientPicker(false);
+          setPatientSearchQuery('');
+        }}
       >
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity 
-              onPress={() => setShowPatientPicker(false)}
+              onPress={() => {
+                setShowPatientPicker(false);
+                setPatientSearchQuery('');
+              }}
               style={styles.modalCloseButton}
             >
               <Text style={styles.modalCloseText}>Cancel</Text>
@@ -510,44 +540,115 @@ function ManagePatientsContent() {
             <View style={styles.modalHeaderSpacer} />
           </View>
 
-          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
-            {patients.map((patient) => (
-              <TouchableOpacity
-                key={patient.id}
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <Search 
+                size={isWeb && isDesktop ? 22 : 20} 
+                color="#8E8E93" 
+                strokeWidth={2} 
+              />
+              <TextInput
                 style={[
-                  styles.patientPickerItem,
-                  selectedPatient?.id === patient.id && styles.patientPickerItemSelected
+                  styles.searchInput,
+                  isWeb && isDesktop && {
+                    fontSize: isLargeDesktop ? 18 : 16,
+                  }
                 ]}
-                onPress={() => selectPatient(patient)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.patientPickerInfo}>
-                  <View style={styles.patientPickerAvatar}>
-                    <User 
+                placeholder="Search patients by name or email..."
+                placeholderTextColor="#8E8E93"
+                value={patientSearchQuery}
+                onChangeText={setPatientSearchQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {patientSearchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={clearPatientSearch}
+                  style={styles.clearSearchButton}
+                  activeOpacity={0.7}
+                >
+                  <X 
+                    size={isWeb && isDesktop ? 20 : 18} 
+                    color="#8E8E93" 
+                    strokeWidth={2} 
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            {filteredPatients.length === 0 ? (
+              <View style={styles.noSearchResults}>
+                <View style={styles.noSearchResultsIcon}>
+                  <Search 
+                    size={isWeb && isDesktop ? 56 : 48} 
+                    color="#8E8E93" 
+                    strokeWidth={1.5} 
+                  />
+                </View>
+                <Text style={styles.noSearchResultsTitle}>
+                  {patientSearchQuery ? 'No patients found' : 'No patients available'}
+                </Text>
+                <Text style={styles.noSearchResultsSubtitle}>
+                  {patientSearchQuery 
+                    ? `No patients match "${patientSearchQuery}". Try a different search term.`
+                    : 'You don\'t have any patients assigned to your care yet.'
+                  }
+                </Text>
+              </View>
+            ) : (
+              filteredPatients.map((patient) => (
+                <TouchableOpacity
+                  key={patient.id}
+                  style={[
+                    styles.patientPickerItem,
+                    selectedPatient?.id === patient.id && styles.patientPickerItemSelected
+                  ]}
+                  onPress={() => selectPatient(patient)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.patientPickerInfo}>
+                    <View style={styles.patientPickerAvatar}>
+                      <User 
+                        size={24} 
+                        color="#007AFF" 
+                        strokeWidth={2} 
+                      />
+                    </View>
+                    <View style={styles.patientPickerDetails}>
+                      <Text style={styles.patientPickerName}>
+                        {getDisplayName(patient)}
+                      </Text>
+                      <Text style={styles.patientPickerEmail}>
+                        {patient.email}
+                      </Text>
+                      <Text style={styles.patientPickerSince}>
+                        Patient since {new Date(patient.created_at).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </View>
+                  {selectedPatient?.id === patient.id && (
+                    <Check 
                       size={24} 
                       color="#007AFF" 
                       strokeWidth={2} 
                     />
-                  </View>
-                  <View style={styles.patientPickerDetails}>
-                    <Text style={styles.patientPickerName}>
-                      {getDisplayName(patient)}
-                    </Text>
-                    <Text style={styles.patientPickerEmail}>
-                      {patient.email}
-                    </Text>
-                  </View>
-                </View>
-                {selectedPatient?.id === patient.id && (
-                  <Check 
-                    size={24} 
-                    color="#007AFF" 
-                    strokeWidth={2} 
-                  />
-                )}
-              </TouchableOpacity>
-            ))}
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
           </ScrollView>
+
+          {/* Search Results Summary */}
+          {patientSearchQuery && filteredPatients.length > 0 && (
+            <View style={styles.searchSummary}>
+              <Text style={styles.searchSummaryText}>
+                {filteredPatients.length} of {patients.length} patients shown
+              </Text>
+            </View>
+          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -876,6 +977,37 @@ const styles = StyleSheet.create({
   modalHeaderSpacer: {
     width: 60,
   },
+  // Search styles
+  searchContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1C1C1E',
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  clearSearchButton: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#E5E5EA',
+    marginLeft: 8,
+  },
   modalContent: {
     flex: 1,
     paddingTop: 8,
@@ -922,6 +1054,62 @@ const styles = StyleSheet.create({
   },
   patientPickerEmail: {
     fontSize: 15,
+    color: '#8E8E93',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  patientPickerSince: {
+    fontSize: 13,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+  },
+  // No search results styles
+  noSearchResults: {
+    alignItems: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  noSearchResultsIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+  },
+  noSearchResultsTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  noSearchResultsSubtitle: {
+    fontSize: 16,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  // Search summary styles
+  searchSummary: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+    alignItems: 'center',
+  },
+  searchSummaryText: {
+    fontSize: 14,
     color: '#8E8E93',
     fontWeight: '500',
   },
