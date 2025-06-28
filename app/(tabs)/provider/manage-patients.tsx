@@ -12,21 +12,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
-import {
-  Users,
-  Plus,
-  Search,
-  UserPlus,
-  Calendar,
-  Clock,
-  Trash2,
-  ChevronRight,
-  Heart,
-  Mail,
-  User,
-  Activity,
-  BarChart3,
-} from 'lucide-react-native';
+import { Users, Plus, Search, UserPlus, Calendar, Clock, Trash2, ChevronRight, Heart, Mail, User, Activity, ChartBar as BarChart3 } from 'lucide-react-native';
 import { SupabaseService, UserProfile, CareTaskInsert } from '@/lib/supabaseService';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router } from 'expo-router';
