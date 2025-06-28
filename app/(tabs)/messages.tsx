@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Dimensions,
   RefreshControl,
   Alert,
+  Image,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { 
   MessageCircle, 
@@ -23,7 +25,9 @@ import {
   CheckCheck,
   ArrowLeft,
   Plus,
-  Mail
+  Mail,
+  Heart,
+  Briefcase
 } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { 
@@ -39,6 +43,7 @@ export default function MessagesScreen() {
   const { conversationWith } = useLocalSearchParams();
   const { userProfile } = useUser();
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
+  const scrollViewRef = useRef<ScrollView>(null);
   
   // State for conversations list
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -78,6 +83,15 @@ export default function MessagesScreen() {
       openConversationById(conversationWith);
     }
   }, [conversationWith]);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
 
   const loadConversations = async () => {
     try {
@@ -240,9 +254,52 @@ export default function MessagesScreen() {
     const diffMins = Math.floor(diffMs / 60000);
     
     if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h`;
+    if (diffMins < 10080) return `${Math.floor(diffMins / 1440)}d`;
     return date.toLocaleDateString();
+  };
+
+  const getDisplayName = (user: { full_name?: string; username?: string; email: string }) => {
+    return user.full_name || user.username || user.email.split('@')[0];
+  };
+
+  const renderAvatar = (user: { avatar_url?: string }, size: number = 40) => {
+    if (user.avatar_url) {
+      return (
+        <Image
+          source={{ uri: user.avatar_url }}
+          style={[
+            styles.avatarImage,
+            { width: size, height: size, borderRadius: size / 2 }
+          ]}
+          defaultSource={require('../../assets/images/icon.png')}
+        />
+      );
+    }
+    
+    return (
+      <View style={[
+        styles.avatarFallback,
+        { 
+          width: size, 
+          height: size, 
+          borderRadius: size / 2,
+          backgroundColor: '#F0F9FF',
+          borderWidth: 2,
+          borderColor: '#007AFF',
+        }
+      ]}>
+        <User size={size * 0.5} color="#007AFF" strokeWidth={2} />
+      </View>
+    );
+  };
+
+  const getRoleIcon = (role?: string) => {
+    if (role === 'provider') {
+      return <Briefcase size={12} color="#007AFF" strokeWidth={2} />;
+    }
+    return <Heart size={12} color="#FF69B4" strokeWidth={2} />;
   };
 
   const isWeb = Platform.OS === 'web';
@@ -305,122 +362,150 @@ export default function MessagesScreen() {
   if (selectedConversation) {
     return (
       <SafeAreaView style={responsiveStyles.container}>
-        <View style={styles.conversationHeader}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => setSelectedConversation(null)}
-            activeOpacity={0.7}
-          >
-            <ArrowLeft size={24} color="#007AFF" strokeWidth={2} />
-          </TouchableOpacity>
-          
-          <View style={styles.conversationInfo}>
-            <View style={styles.participantAvatar}>
-              <User size={20} color="#007AFF" strokeWidth={2} />
-            </View>
-            <View>
-              <Text style={styles.participantName}>
-                {selectedConversation.participant.full_name || 
-                 selectedConversation.participant.username || 
-                 selectedConversation.participant.email.split('@')[0]}
-              </Text>
-              <Text style={styles.participantEmail}>
-                {selectedConversation.participant.email}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        <ScrollView 
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          {isLoadingMessages ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.loadingText}>Loading messages...</Text>
-            </View>
-          ) : messages.length === 0 ? (
-            <View style={styles.emptyMessages}>
-              <MessageCircle size={48} color="#8E8E93" strokeWidth={1.5} />
-              <Text style={styles.emptyMessagesTitle}>Start the conversation</Text>
-              <Text style={styles.emptyMessagesSubtitle}>
-                Send a message to begin chatting with {selectedConversation.participant.full_name || selectedConversation.participant.email}
-              </Text>
-            </View>
-          ) : (
-            messages.map((message) => {
-              const isCurrentUser = message.sender_id === userProfile?.id;
-              return (
-                <View
-                  key={message.id}
-                  style={[
-                    styles.messageContainer,
-                    isCurrentUser ? styles.sentMessage : styles.receivedMessage,
-                  ]}
-                >
-                  <Text style={[
-                    styles.messageText,
-                    isCurrentUser ? styles.sentMessageText : styles.receivedMessageText,
-                  ]}>
-                    {message.content}
+          <View style={styles.conversationHeader}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setSelectedConversation(null)}
+              activeOpacity={0.7}
+            >
+              <ArrowLeft size={24} color="#007AFF" strokeWidth={2} />
+            </TouchableOpacity>
+            
+            <View style={styles.conversationInfo}>
+              {renderAvatar(selectedConversation.participant, 44)}
+              <View style={styles.participantDetails}>
+                <View style={styles.participantNameRow}>
+                  <Text style={styles.participantName}>
+                    {getDisplayName(selectedConversation.participant)}
                   </Text>
-                  <View style={styles.messageFooter}>
-                    <Text style={[
-                      styles.messageTime,
-                      isCurrentUser ? styles.sentMessageTime : styles.receivedMessageTime,
-                    ]}>
-                      {formatTime(message.created_at)}
-                    </Text>
-                    {isCurrentUser && (
-                      <View style={styles.messageStatus}>
-                        {message.read_at ? (
-                          <CheckCheck size={14} color="#007AFF" strokeWidth={2} />
-                        ) : (
-                          <Check size={14} color="#8E8E93" strokeWidth={2} />
-                        )}
+                  {getRoleIcon(selectedConversation.participant.role)}
+                </View>
+                <Text style={styles.participantEmail}>
+                  {selectedConversation.participant.email}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {error && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.messagesContainer}
+            contentContainerStyle={styles.messagesContent}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+          >
+            {isLoadingMessages ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#007AFF" />
+                <Text style={styles.loadingText}>Loading messages...</Text>
+              </View>
+            ) : messages.length === 0 ? (
+              <View style={styles.emptyMessages}>
+                <View style={styles.emptyMessagesIcon}>
+                  <MessageCircle size={56} color="#007AFF" strokeWidth={1.5} />
+                </View>
+                <Text style={styles.emptyMessagesTitle}>Start the conversation</Text>
+                <Text style={styles.emptyMessagesSubtitle}>
+                  Send a message to begin chatting with {getDisplayName(selectedConversation.participant)}
+                </Text>
+              </View>
+            ) : (
+              messages.map((message, index) => {
+                const isCurrentUser = message.sender_id === userProfile?.id;
+                const showAvatar = !isCurrentUser && (
+                  index === 0 || 
+                  messages[index - 1]?.sender_id !== message.sender_id
+                );
+                
+                return (
+                  <View
+                    key={message.id}
+                    style={[
+                      styles.messageContainer,
+                      isCurrentUser ? styles.sentMessage : styles.receivedMessage,
+                    ]}
+                  >
+                    {showAvatar && (
+                      <View style={styles.messageAvatar}>
+                        {renderAvatar(message.sender, 32)}
                       </View>
                     )}
+                    <View style={[
+                      styles.messageBubble,
+                      isCurrentUser ? styles.sentBubble : styles.receivedBubble,
+                      !showAvatar && !isCurrentUser && styles.messageBubbleNoAvatar,
+                    ]}>
+                      <Text style={[
+                        styles.messageText,
+                        isCurrentUser ? styles.sentMessageText : styles.receivedMessageText,
+                      ]}>
+                        {message.content}
+                      </Text>
+                      <View style={styles.messageFooter}>
+                        <Text style={[
+                          styles.messageTime,
+                          isCurrentUser ? styles.sentMessageTime : styles.receivedMessageTime,
+                        ]}>
+                          {formatTime(message.created_at)}
+                        </Text>
+                        {isCurrentUser && (
+                          <View style={styles.messageStatus}>
+                            {message.read_at ? (
+                              <CheckCheck size={14} color="rgba(255, 255, 255, 0.8)" strokeWidth={2} />
+                            ) : (
+                              <Check size={14} color="rgba(255, 255, 255, 0.6)" strokeWidth={2} />
+                            )}
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
-
-        <View style={styles.messageInputContainer}>
-          <TextInput
-            style={styles.messageInput}
-            placeholder="Type a message..."
-            placeholderTextColor="#8E8E93"
-            value={newMessage}
-            onChangeText={setNewMessage}
-            multiline
-            maxLength={1000}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!newMessage.trim() || isSending) && styles.sendButtonDisabled,
-            ]}
-            onPress={sendMessage}
-            disabled={!newMessage.trim() || isSending}
-            activeOpacity={0.7}
-          >
-            {isSending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Send size={20} color="#FFFFFF" strokeWidth={2} />
+                );
+              })
             )}
-          </TouchableOpacity>
-        </View>
+          </ScrollView>
+
+          <View style={styles.messageInputContainer}>
+            <View style={styles.messageInputWrapper}>
+              <TextInput
+                style={styles.messageInput}
+                placeholder="Type a message..."
+                placeholderTextColor="#8E8E93"
+                value={newMessage}
+                onChangeText={setNewMessage}
+                multiline
+                maxLength={1000}
+                onSubmitEditing={sendMessage}
+                blurOnSubmit={false}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  (!newMessage.trim() || isSending) && styles.sendButtonDisabled,
+                ]}
+                onPress={sendMessage}
+                disabled={!newMessage.trim() || isSending}
+                activeOpacity={0.7}
+              >
+                {isSending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Send size={18} color="#FFFFFF" strokeWidth={2} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -474,15 +559,19 @@ export default function MessagesScreen() {
               onPress={() => startNewConversation(user)}
               activeOpacity={0.7}
             >
-              <View style={styles.userAvatar}>
-                <User size={20} color="#007AFF" strokeWidth={2} />
-              </View>
+              {renderAvatar(user, 48)}
               <View style={styles.userInfo}>
-                <Text style={styles.userName}>
-                  {user.full_name || user.username || user.email.split('@')[0]}
-                </Text>
+                <View style={styles.userNameRow}>
+                  <Text style={styles.userName}>
+                    {getDisplayName(user)}
+                  </Text>
+                  {getRoleIcon(user.role)}
+                </View>
                 <Text style={styles.userEmail}>{user.email}</Text>
-                <Text style={styles.userRole}>
+                <Text style={[
+                  styles.userRole,
+                  { color: user.role === 'provider' ? '#007AFF' : '#FF69B4' }
+                ]}>
                   {user.role === 'provider' ? 'Healthcare Provider' : 'Patient'}
                 </Text>
               </View>
@@ -491,7 +580,9 @@ export default function MessagesScreen() {
           
           {searchQuery && !isSearching && searchResults.length === 0 && (
             <View style={styles.noResults}>
-              <Mail size={48} color="#8E8E93" strokeWidth={1.5} />
+              <View style={styles.noResultsIcon}>
+                <Mail size={56} color="#8E8E93" strokeWidth={1.5} />
+              </View>
               <Text style={styles.noResultsTitle}>No users found</Text>
               <Text style={styles.noResultsSubtitle}>
                 Try searching with a different email address
@@ -557,11 +648,11 @@ export default function MessagesScreen() {
         ) : conversations.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyStateIcon}>
-              <MessageCircle size={64} color="#8E8E93" strokeWidth={1.5} />
+              <MessageCircle size={72} color="#007AFF" strokeWidth={1.5} />
             </View>
             <Text style={styles.emptyStateTitle}>No conversations yet</Text>
             <Text style={styles.emptyStateSubtitle}>
-              Start a conversation with your healthcare provider or patients
+              Start a conversation with your healthcare provider or patients to begin secure messaging
             </Text>
             <TouchableOpacity
               style={styles.startConversationButton}
@@ -581,17 +672,16 @@ export default function MessagesScreen() {
                 onPress={() => openConversation(conversation)}
                 activeOpacity={0.7}
               >
-                <View style={styles.conversationAvatar}>
-                  <User size={24} color="#007AFF" strokeWidth={2} />
-                </View>
+                {renderAvatar(conversation.participant, 56)}
                 
                 <View style={styles.conversationContent}>
                   <View style={styles.conversationHeader}>
-                    <Text style={styles.conversationName}>
-                      {conversation.participant.full_name || 
-                       conversation.participant.username || 
-                       conversation.participant.email.split('@')[0]}
-                    </Text>
+                    <View style={styles.conversationNameRow}>
+                      <Text style={styles.conversationName}>
+                        {getDisplayName(conversation.participant)}
+                      </Text>
+                      {getRoleIcon(conversation.participant.role)}
+                    </View>
                     {conversation.lastMessage && (
                       <Text style={styles.conversationTime}>
                         {formatTime(conversation.lastMessage.created_at)}
@@ -600,7 +690,7 @@ export default function MessagesScreen() {
                   </View>
                   
                   <View style={styles.conversationFooter}>
-                    <Text style={styles.conversationPreview} numberOfLines={1}>
+                    <Text style={styles.conversationPreview} numberOfLines={2}>
                       {conversation.lastMessage?.content || 'No messages yet'}
                     </Text>
                     {conversation.unreadCount > 0 && (
@@ -643,19 +733,26 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 16,
     textAlign: 'center',
+    fontWeight: '500',
   },
   errorContainer: {
     backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 24,
     borderLeftWidth: 4,
     borderLeftColor: '#FF3B30',
+    shadowColor: '#FF3B30',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   errorText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#FF3B30',
-    fontWeight: '500',
+    fontWeight: '600',
+    lineHeight: 20,
   },
   header: {
     marginBottom: 32,
@@ -672,13 +769,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F0F9FF',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
     borderWidth: 2,
     borderColor: '#007AFF',
   },
@@ -692,136 +794,153 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#8E8E93',
     lineHeight: 22,
+    fontWeight: '500',
   },
   newMessageButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F0F9FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyStateIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F2F2F7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    borderWidth: 2,
-    borderColor: '#E5E5EA',
-  },
-  emptyStateTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1C1C1E',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  emptyStateSubtitle: {
-    fontSize: 16,
-    color: '#8E8E93',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
-  startConversationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#007AFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#007AFF',
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 12,
     elevation: 4,
   },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: 40,
+  },
+  emptyStateIcon: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 32,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 3,
+    borderColor: '#007AFF',
+  },
+  emptyStateTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 17,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 40,
+    fontWeight: '500',
+  },
+  startConversationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 28,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    elevation: 6,
+  },
   startConversationButtonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
     marginLeft: 8,
   },
   conversationsList: {
-    gap: 12,
+    gap: 16,
   },
   conversationItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  conversationAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#F0F9FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    borderWidth: 2,
-    borderColor: '#007AFF',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 16,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.1)',
   },
   conversationContent: {
     flex: 1,
+    marginLeft: 16,
   },
   conversationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  conversationNameRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    flex: 1,
+    marginRight: 8,
   },
   conversationName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#1C1C1E',
-    flex: 1,
+    marginRight: 6,
   },
   conversationTime: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#8E8E93',
     fontWeight: '500',
   },
   conversationFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   conversationPreview: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#8E8E93',
     flex: 1,
-    marginRight: 8,
+    marginRight: 12,
+    lineHeight: 20,
   },
   unreadBadge: {
     backgroundColor: '#007AFF',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
   },
   unreadCount: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
+  },
+  // Avatar styles
+  avatarImage: {
+    resizeMode: 'cover',
+  },
+  avatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // Conversation view styles
   conversationHeader: {
@@ -832,10 +951,15 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   backButton: {
-    padding: 8,
-    borderRadius: 8,
+    padding: 10,
+    borderRadius: 12,
     backgroundColor: '#F0F9FF',
     marginRight: 16,
   },
@@ -844,74 +968,111 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  participantAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F9FF',
-    justifyContent: 'center',
+  participantDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  participantNameRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12,
-    borderWidth: 2,
-    borderColor: '#007AFF',
+    marginBottom: 4,
   },
   participantName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1C1C1E',
-    marginBottom: 2,
+    marginRight: 8,
   },
   participantEmail: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#8E8E93',
+    fontWeight: '500',
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F8F9FA',
   },
   messagesContent: {
-    padding: 16,
+    padding: 20,
     gap: 12,
   },
   emptyMessages: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
     paddingHorizontal: 40,
   },
+  emptyMessagesIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
   emptyMessagesTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#1C1C1E',
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
   },
   emptyMessagesSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#8E8E93',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '500',
   },
   messageContainer: {
-    maxWidth: '80%',
-    borderRadius: 16,
-    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     marginVertical: 2,
   },
   sentMessage: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#007AFF',
+    justifyContent: 'flex-end',
   },
   receivedMessage: {
-    alignSelf: 'flex-start',
+    justifyContent: 'flex-start',
+  },
+  messageAvatar: {
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  messageBubble: {
+    maxWidth: '75%',
+    borderRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  messageBubbleNoAvatar: {
+    marginLeft: 40,
+  },
+  sentBubble: {
+    backgroundColor: '#007AFF',
+    borderBottomRightRadius: 8,
+  },
+  receivedBubble: {
     backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 8,
     borderWidth: 1,
     borderColor: '#E5E5EA',
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 20,
-    marginBottom: 4,
+    lineHeight: 22,
+    marginBottom: 6,
   },
   sentMessageText: {
     color: '#FFFFFF',
@@ -925,48 +1086,64 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   messageTime: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
   },
   sentMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   receivedMessageTime: {
     color: '#8E8E93',
   },
   messageStatus: {
-    marginLeft: 4,
+    marginLeft: 6,
   },
   messageInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: -2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  messageInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
   },
   messageInput: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     fontSize: 16,
     color: '#1C1C1E',
-    maxHeight: 100,
+    maxHeight: 120,
     marginRight: 12,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    fontWeight: '500',
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
   },
   sendButtonDisabled: {
     backgroundColor: '#8E8E93',
+    shadowOpacity: 0,
   },
   // New conversation styles
   newConversationHeader: {
@@ -977,9 +1154,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
   },
   newConversationTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#1C1C1E',
     marginLeft: 16,
@@ -987,84 +1169,98 @@ const styles = StyleSheet.create({
   searchContainer: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
   },
   searchInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 12,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
     color: '#1C1C1E',
     marginLeft: 12,
+    fontWeight: '500',
   },
   searchResults: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F8F9FA',
   },
   userResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
   },
-  userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F0F9FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    borderWidth: 2,
-    borderColor: '#007AFF',
-  },
   userInfo: {
     flex: 1,
+    marginLeft: 16,
+  },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   userName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
     color: '#1C1C1E',
-    marginBottom: 2,
+    marginRight: 8,
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#8E8E93',
-    marginBottom: 2,
+    marginBottom: 4,
+    fontWeight: '500',
   },
   userRole: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
   },
   noResults: {
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
     paddingHorizontal: 40,
   },
+  noResultsIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: '#E5E5EA',
+  },
   noResultsTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#1C1C1E',
-    marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
   },
   noResultsSubtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#8E8E93',
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+    fontWeight: '500',
   },
 });
