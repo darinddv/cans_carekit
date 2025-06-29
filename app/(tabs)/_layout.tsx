@@ -43,10 +43,10 @@ export default function TabLayout() {
           backgroundColor: '#FFFFFF',
           borderTopWidth: isWeb ? 1 : 0.5,
           borderTopColor: '#E5E5EA',
-          paddingTop: isWeb && isDesktop ? 12 : 8,
-          paddingBottom: Platform.OS === 'ios' ? 24 : isWeb && isDesktop ? 12 : 8,
-          height: Platform.OS === 'ios' ? 88 : isWeb && isDesktop ? 72 : 64,
-          paddingHorizontal: isWeb && isDesktop ? 24 : 0,
+          paddingTop: isWeb && isDesktop ? 16 : 12,
+          paddingBottom: Platform.OS === 'ios' ? 34 : isWeb && isDesktop ? 16 : 12,
+          height: Platform.OS === 'ios' ? 98 : isWeb && isDesktop ? 80 : 72,
+          paddingHorizontal: isWeb && isDesktop ? 24 : 8,
           ...(isWeb && isDesktop && {
             shadowColor: '#000',
             shadowOpacity: 0.1,
@@ -56,12 +56,14 @@ export default function TabLayout() {
           }),
         },
         tabBarLabelStyle: {
-          fontSize: isWeb && isDesktop ? 12 : 10,
+          fontSize: isWeb && isDesktop ? 13 : 11,
           fontWeight: '600',
-          marginTop: isWeb && isDesktop ? 6 : 4,
+          marginTop: isWeb && isDesktop ? 8 : 6,
+          marginBottom: isWeb && isDesktop ? 4 : 2,
         },
         tabBarIconStyle: {
-          marginTop: isWeb && isDesktop ? 4 : 0,
+          marginTop: isWeb && isDesktop ? 6 : 4,
+          marginBottom: 0,
         },
       }}
     >
