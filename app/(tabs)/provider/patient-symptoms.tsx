@@ -10,6 +10,7 @@ import {
   Platform,
   Dimensions,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { 
   Activity, 
@@ -29,7 +30,11 @@ import {
   Users, 
   Utensils,
   User,
-  Mail
+  Mail,
+  Brain,
+  Copy,
+  Share2,
+  Sparkles
 } from 'lucide-react-native';
 import { RoleGuard } from '@/components/RoleGuard';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -39,6 +44,8 @@ import {
   SymptomTrend,
 } from '@/lib/symptomService';
 import { SupabaseService, UserProfile } from '@/lib/supabaseService';
+import { LLMService } from '@/lib/llmService';
+import * as Clipboard from 'expo-clipboard';
 
 // Icon mapping for symptom categories
 const categoryIcons: Record<string, any> = {
@@ -64,6 +71,11 @@ function PatientSymptomsContent() {
   const [recentLogs, setRecentLogs] = useState<SymptomLogWithCategory[]>([]);
   const [trends, setTrends] = useState<SymptomTrend[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<7 | 30 | 90>(30);
+
+  // LLM Summary state
+  const [llmSummary, setLlmSummary] = useState<string | null>(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -124,6 +136,82 @@ function PatientSymptomsContent() {
       setIsRefreshing(false);
     }
   }, [patientId, selectedPeriod]);
+
+  const handleGenerateSummary = async () => {
+    if (!patientId || typeof patientId !== 'string') {
+      setSummaryError('Patient ID is required');
+      return;
+    }
+
+    try {
+      setIsSummarizing(true);
+      setSummaryError(null);
+      setLlmSummary(null);
+
+      console.log('Generating summary for patient:', patientId);
+
+      const summary = await LLMService.generatePatientSummary(patientId, selectedPeriod);
+      setLlmSummary(summary);
+
+      console.log('Summary generated successfully');
+    } catch (err: any) {
+      console.error('Error generating summary:', err);
+      setSummaryError(err.message || 'Failed to generate patient summary');
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleCopySummary = async () => {
+    if (!llmSummary) return;
+
+    try {
+      if (Platform.OS === 'web') {
+        // Web clipboard API
+        await navigator.clipboard.writeText(llmSummary);
+      } else {
+        // Mobile clipboard
+        await Clipboard.setStringAsync(llmSummary);
+      }
+
+      // Show success feedback
+      if (Platform.OS === 'web') {
+        // For web, we could show a toast or temporary message
+        console.log('Summary copied to clipboard');
+      } else {
+        Alert.alert('Success', 'Summary copied to clipboard');
+      }
+    } catch (err) {
+      console.error('Error copying to clipboard:', err);
+      Alert.alert('Error', 'Failed to copy summary to clipboard');
+    }
+  };
+
+  const handleShareSummary = async () => {
+    if (!llmSummary) return;
+
+    try {
+      if (Platform.OS === 'web') {
+        // Web Share API (if supported) or fallback to copy
+        if (navigator.share) {
+          await navigator.share({
+            title: 'Patient Summary',
+            text: llmSummary,
+          });
+        } else {
+          // Fallback to copy on web
+          await handleCopySummary();
+        }
+      } else {
+        // Mobile sharing would require expo-sharing
+        // For now, fallback to copy
+        await handleCopySummary();
+      }
+    } catch (err) {
+      console.error('Error sharing summary:', err);
+      Alert.alert('Error', 'Failed to share summary');
+    }
+  };
 
   const getSeverityColor = (severity: number): string => {
     if (severity <= 3) return '#10B981'; // Green
@@ -323,6 +411,178 @@ function PatientSymptomsContent() {
           </View>
         )}
 
+        {/* AI Summary Section */}
+        <View style={[
+          styles.summarySection,
+          isWeb && isDesktop && {
+            borderRadius: 20,
+            padding: isLargeDesktop ? 28 : 24,
+          }
+        ]}>
+          <View style={styles.summaryHeader}>
+            <View style={styles.summaryTitleContainer}>
+              <View style={[
+                styles.summaryIconContainer,
+                isWeb && isDesktop && {
+                  width: isLargeDesktop ? 48 : 44,
+                  height: isLargeDesktop ? 48 : 44,
+                  borderRadius: isLargeDesktop ? 24 : 22,
+                }
+              ]}>
+                <Brain 
+                  size={isWeb && isDesktop ? (isLargeDesktop ? 24 : 22) : 20} 
+                  color="#FFFFFF" 
+                  strokeWidth={2} 
+                />
+              </View>
+              <View>
+                <Text style={[
+                  styles.summaryTitle,
+                  isWeb && isDesktop && {
+                    fontSize: isLargeDesktop ? 22 : 20,
+                  }
+                ]}>
+                  AI Patient Summary
+                </Text>
+                <Text style={[
+                  styles.summarySubtitle,
+                  isWeb && isDesktop && {
+                    fontSize: isLargeDesktop ? 14 : 13,
+                  }
+                ]}>
+                  Comprehensive analysis of {selectedPeriod}-day period
+                </Text>
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              style={[
+                styles.generateButton,
+                isSummarizing && styles.generateButtonDisabled,
+                isWeb && isDesktop && {
+                  paddingHorizontal: isLargeDesktop ? 20 : 18,
+                  paddingVertical: isLargeDesktop ? 12 : 10,
+                  borderRadius: 12,
+                }
+              ]}
+              onPress={handleGenerateSummary}
+              disabled={isSummarizing}
+              activeOpacity={0.7}
+            >
+              {isSummarizing ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Sparkles 
+                    size={isWeb && isDesktop ? 18 : 16} 
+                    color="#FFFFFF" 
+                    strokeWidth={2} 
+                  />
+                  <Text style={[
+                    styles.generateButtonText,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 16 : 15,
+                    }
+                  ]}>
+                    Generate
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Summary Content */}
+          {summaryError && (
+            <View style={styles.summaryErrorContainer}>
+              <AlertCircle size={20} color="#FF3B30" strokeWidth={2} />
+              <Text style={styles.summaryErrorText}>{summaryError}</Text>
+            </View>
+          )}
+
+          {llmSummary && (
+            <View style={styles.summaryContent}>
+              <Text style={[
+                styles.summaryText,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 16 : 15,
+                  lineHeight: isLargeDesktop ? 24 : 22,
+                }
+              ]}>
+                {llmSummary}
+              </Text>
+              
+              <View style={styles.summaryActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.summaryActionButton,
+                    isWeb && isDesktop && {
+                      paddingHorizontal: isLargeDesktop ? 16 : 14,
+                      paddingVertical: isLargeDesktop ? 10 : 8,
+                      borderRadius: 10,
+                    }
+                  ]}
+                  onPress={handleCopySummary}
+                  activeOpacity={0.7}
+                >
+                  <Copy 
+                    size={isWeb && isDesktop ? 16 : 14} 
+                    color="#007AFF" 
+                    strokeWidth={2} 
+                  />
+                  <Text style={[
+                    styles.summaryActionText,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 14 : 13,
+                    }
+                  ]}>
+                    Copy
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.summaryActionButton,
+                    isWeb && isDesktop && {
+                      paddingHorizontal: isLargeDesktop ? 16 : 14,
+                      paddingVertical: isLargeDesktop ? 10 : 8,
+                      borderRadius: 10,
+                    }
+                  ]}
+                  onPress={handleShareSummary}
+                  activeOpacity={0.7}
+                >
+                  <Share2 
+                    size={isWeb && isDesktop ? 16 : 14} 
+                    color="#007AFF" 
+                    strokeWidth={2} 
+                  />
+                  <Text style={[
+                    styles.summaryActionText,
+                    isWeb && isDesktop && {
+                      fontSize: isLargeDesktop ? 14 : 13,
+                    }
+                  ]}>
+                    Share
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {!llmSummary && !summaryError && !isSummarizing && (
+            <View style={styles.summaryPlaceholder}>
+              <Text style={[
+                styles.summaryPlaceholderText,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 16 : 15,
+                }
+              ]}>
+                Click "Generate" to create an AI-powered summary of this patient's mental health data, including symptom trends, task completion, and clinical insights.
+              </Text>
+            </View>
+          )}
+        </View>
+
         {/* Period Selection */}
         <View style={styles.periodSelector}>
           <Text style={[
@@ -373,7 +633,7 @@ function PatientSymptomsContent() {
             }
           ]}>
             <Text style={[
-              styles.summaryTitle,
+              styles.summaryCardTitle,
               isWeb && isDesktop && {
                 fontSize: isLargeDesktop ? 22 : 20,
               }
@@ -855,6 +1115,133 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     flex: 1,
   },
+  summarySection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  summaryTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  summaryIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#007AFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  summarySubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontWeight: '500',
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    shadowColor: '#007AFF',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  generateButtonDisabled: {
+    backgroundColor: '#8E8E93',
+    shadowOpacity: 0,
+  },
+  generateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 6,
+  },
+  summaryErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEBEE',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 16,
+  },
+  summaryErrorText: {
+    fontSize: 14,
+    color: '#FF3B30',
+    fontWeight: '500',
+    marginLeft: 8,
+    flex: 1,
+  },
+  summaryContent: {
+    marginTop: 16,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#1C1C1E',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  summaryActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  summaryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  summaryActionText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  summaryPlaceholder: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderStyle: 'dashed',
+  },
+  summaryPlaceholderText: {
+    fontSize: 14,
+    color: '#8E8E93',
+    lineHeight: 20,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   periodSelector: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -901,7 +1288,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
-  summaryTitle: {
+  summaryCardTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#1C1C1E',
