@@ -32,8 +32,6 @@ import {
   User,
   Mail,
   Brain,
-  Copy,
-  Share2,
   Sparkles
 } from 'lucide-react-native';
 import { RoleGuard } from '@/components/RoleGuard';
@@ -45,7 +43,6 @@ import {
 } from '@/lib/symptomService';
 import { SupabaseService, UserProfile } from '@/lib/supabaseService';
 import { LLMService } from '@/lib/llmService';
-import * as Clipboard from 'expo-clipboard';
 
 // Icon mapping for symptom categories
 const categoryIcons: Record<string, any> = {
@@ -159,57 +156,6 @@ function PatientSymptomsContent() {
       setSummaryError(err.message || 'Failed to generate patient summary');
     } finally {
       setIsSummarizing(false);
-    }
-  };
-
-  const handleCopySummary = async () => {
-    if (!llmSummary) return;
-
-    try {
-      if (Platform.OS === 'web') {
-        // Web clipboard API
-        await navigator.clipboard.writeText(llmSummary);
-      } else {
-        // Mobile clipboard
-        await Clipboard.setStringAsync(llmSummary);
-      }
-
-      // Show success feedback
-      if (Platform.OS === 'web') {
-        // For web, we could show a toast or temporary message
-        console.log('Summary copied to clipboard');
-      } else {
-        Alert.alert('Success', 'Summary copied to clipboard');
-      }
-    } catch (err) {
-      console.error('Error copying to clipboard:', err);
-      Alert.alert('Error', 'Failed to copy summary to clipboard');
-    }
-  };
-
-  const handleShareSummary = async () => {
-    if (!llmSummary) return;
-
-    try {
-      if (Platform.OS === 'web') {
-        // Web Share API (if supported) or fallback to copy
-        if (navigator.share) {
-          await navigator.share({
-            title: 'Patient Summary',
-            text: llmSummary,
-          });
-        } else {
-          // Fallback to copy on web
-          await handleCopySummary();
-        }
-      } else {
-        // Mobile sharing would require expo-sharing
-        // For now, fallback to copy
-        await handleCopySummary();
-      }
-    } catch (err) {
-      console.error('Error sharing summary:', err);
-      Alert.alert('Error', 'Failed to share summary');
     }
   };
 
@@ -510,62 +456,6 @@ function PatientSymptomsContent() {
               ]}>
                 {llmSummary}
               </Text>
-              
-              <View style={styles.summaryActions}>
-                <TouchableOpacity
-                  style={[
-                    styles.summaryActionButton,
-                    isWeb && isDesktop && {
-                      paddingHorizontal: isLargeDesktop ? 16 : 14,
-                      paddingVertical: isLargeDesktop ? 10 : 8,
-                      borderRadius: 10,
-                    }
-                  ]}
-                  onPress={handleCopySummary}
-                  activeOpacity={0.7}
-                >
-                  <Copy 
-                    size={isWeb && isDesktop ? 16 : 14} 
-                    color="#007AFF" 
-                    strokeWidth={2} 
-                  />
-                  <Text style={[
-                    styles.summaryActionText,
-                    isWeb && isDesktop && {
-                      fontSize: isLargeDesktop ? 14 : 13,
-                    }
-                  ]}>
-                    Copy
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.summaryActionButton,
-                    isWeb && isDesktop && {
-                      paddingHorizontal: isLargeDesktop ? 16 : 14,
-                      paddingVertical: isLargeDesktop ? 10 : 8,
-                      borderRadius: 10,
-                    }
-                  ]}
-                  onPress={handleShareSummary}
-                  activeOpacity={0.7}
-                >
-                  <Share2 
-                    size={isWeb && isDesktop ? 16 : 14} 
-                    color="#007AFF" 
-                    strokeWidth={2} 
-                  />
-                  <Text style={[
-                    styles.summaryActionText,
-                    isWeb && isDesktop && {
-                      fontSize: isLargeDesktop ? 14 : 13,
-                    }
-                  ]}>
-                    Share
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </View>
           )}
 
@@ -1204,27 +1094,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1C1C1E',
     lineHeight: 20,
-    marginBottom: 16,
-  },
-  summaryActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  summaryActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  summaryActionText: {
-    fontSize: 12,
-    color: '#007AFF',
-    fontWeight: '600',
-    marginLeft: 4,
   },
   summaryPlaceholder: {
     marginTop: 16,
