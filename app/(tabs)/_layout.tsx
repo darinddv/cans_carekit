@@ -44,8 +44,8 @@ export default function TabLayout() {
           borderTopWidth: isWeb ? 1 : 0.5,
           borderTopColor: '#E5E5EA',
           paddingTop: isWeb && isDesktop ? 12 : 8,
-          paddingBottom: Platform.OS === 'ios' ? 28 : isWeb && isDesktop ? 12 : 8,
-          height: Platform.OS === 'ios' ? 88 : isWeb && isDesktop ? 72 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 32 : isWeb && isDesktop ? 16 : 12,
+          height: Platform.OS === 'ios' ? 96 : isWeb && isDesktop ? 80 : 72,
           paddingHorizontal: isWeb && isDesktop ? 24 : 0,
           ...(isWeb && isDesktop && {
             shadowColor: '#000',
