@@ -92,23 +92,25 @@ export default function LoginScreen() {
   const isDesktop = windowDimensions.width >= 1024;
   const isLargeDesktop = windowDimensions.width >= 1440;
   const isMobile = windowDimensions.width < 768;
+  const isSmallMobile = windowDimensions.width < 400;
 
   // Calculate responsive logo sizes - significantly increased for mobile
   const getLogoSize = () => {
     if (isMobile) {
-      // Much larger on mobile - increased from 36:40 to 48:56
-      return windowDimensions.width < 400 ? 48 : 56;
+      // Responsive sizing for mobile - smaller on very small screens
+      return isSmallMobile ? 40 : 48;
     } else if (isTablet) {
-      return 40; // Increased from 34 to 40
+      return 40;
     } else if (isDesktop) {
-      return isLargeDesktop ? 44 : 40; // Increased from 38:34 to 44:40
+      return isLargeDesktop ? 44 : 40;
     }
-    return 40; // Increased from 30 to 40
+    return 40;
   };
 
   const getMainIconSize = () => {
     if (isMobile) {
-      return windowDimensions.width < 400 ? 40 : 48;
+      // Responsive sizing for mobile - smaller on very small screens
+      return isSmallMobile ? 32 : 40;
     } else if (isTablet) {
       return 60;
     } else if (isDesktop) {
@@ -190,6 +192,70 @@ export default function LoginScreen() {
           fontSize: 18,
         },
       };
+    } else if (isWeb && isMobile) {
+      // Mobile web responsive adjustments
+      return {
+        ...baseStyles,
+        content: {
+          ...baseStyles.content,
+          paddingHorizontal: isSmallMobile ? 16 : 20,
+          paddingVertical: isSmallMobile ? 16 : 24, // Reduced from default
+        },
+        header: {
+          ...baseStyles.header,
+          marginBottom: isSmallMobile ? 20 : 24, // Reduced from 40
+        },
+        iconContainer: {
+          ...baseStyles.iconContainer,
+          width: getMainIconSize() + 16, // Dynamic sizing with padding
+          height: getMainIconSize() + 16,
+          borderRadius: (getMainIconSize() + 16) / 2,
+          marginBottom: isSmallMobile ? 16 : 20, // Reduced from 24
+        },
+        brandContainer: {
+          ...baseStyles.brandContainer,
+          marginBottom: isSmallMobile ? 8 : 12, // Reduced from 16
+        },
+        brandTitle: {
+          ...baseStyles.brandTitle,
+          fontSize: isSmallMobile ? 32 : 36, // Reduced from 40
+        },
+        brandSubtitle: {
+          ...baseStyles.brandSubtitle,
+          fontSize: isSmallMobile ? 14 : 16, // Reduced from 18
+        },
+        tagline: {
+          ...baseStyles.tagline,
+          fontSize: isSmallMobile ? 13 : 14, // Reduced from 16
+          paddingHorizontal: isSmallMobile ? 12 : 16, // Reduced padding
+        },
+        form: {
+          ...baseStyles.form,
+          marginBottom: isSmallMobile ? 16 : 20, // Reduced from 24
+        },
+        footer: {
+          ...baseStyles.footer,
+          paddingTop: isSmallMobile ? 8 : 12, // Reduced from 16
+        },
+        footerText: {
+          ...baseStyles.footerText,
+          fontSize: isSmallMobile ? 10 : 11, // Reduced from 12
+        },
+        poweredBySection: {
+          ...baseStyles.poweredBySection,
+          marginTop: isSmallMobile ? 16 : 20, // Reduced from 24
+          paddingTop: isSmallMobile ? 12 : 16, // Reduced from 20
+        },
+        poweredByText: {
+          ...baseStyles.poweredByText,
+          fontSize: isSmallMobile ? 10 : 11, // Reduced from 12
+          marginBottom: isSmallMobile ? 8 : 10, // Reduced from 12
+        },
+        logosContainer: {
+          ...baseStyles.logosContainer,
+          gap: isSmallMobile ? 12 : 14, // Reduced gap for better fit
+        },
+      };
     }
     
     return baseStyles;
@@ -212,15 +278,8 @@ export default function LoginScreen() {
         >
           <View style={responsiveStyles.content}>
             {/* Header */}
-            <View style={styles.header}>
-              <View style={[
-                styles.iconContainer,
-                isWeb && isDesktop && {
-                  width: isLargeDesktop ? 100 : 90,
-                  height: isLargeDesktop ? 100 : 90,
-                  borderRadius: isLargeDesktop ? 50 : 45,
-                }
-              ]}>
+            <View style={responsiveStyles.header}>
+              <View style={responsiveStyles.iconContainer}>
                 <BoltLogo 
                   width={getMainIconSize()}
                   height={getMainIconSize()}
@@ -228,7 +287,7 @@ export default function LoginScreen() {
               </View>
               
               {/* Brand Name with Custom Styling */}
-              <View style={styles.brandContainer}>
+              <View style={responsiveStyles.brandContainer}>
                 <View style={styles.brandTitleContainer}>
                   <Text style={[responsiveStyles.brandTitle, styles.wellText]}>
                     well
@@ -242,13 +301,16 @@ export default function LoginScreen() {
                 </Text>
               </View>
               
-              <Text style={responsiveStyles.tagline}>
-                Sign in to access your personalized care plan
-              </Text>
+              {/* Only show tagline on larger screens or when there's enough space */}
+              {(!isWeb || !isMobile || !isSmallMobile) && (
+                <Text style={responsiveStyles.tagline}>
+                  Sign in to access your personalized care plan
+                </Text>
+              )}
             </View>
 
             {/* Login Form */}
-            <View style={styles.form}>
+            <View style={responsiveStyles.form}>
               {error && (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorText}>{error}</Text>
@@ -435,43 +497,21 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Footer */}
-            <View style={styles.footer}>
-              <Text style={[
-                styles.footerText,
-                isWeb && isDesktop && {
-                  fontSize: isLargeDesktop ? 14 : 13,
-                }
-              ]}>
-                Secure authentication powered by Supabase
-              </Text>
-            </View>
+            {/* Footer - Only show on larger screens */}
+            {(!isWeb || !isMobile || !isSmallMobile) && (
+              <View style={responsiveStyles.footer}>
+                <Text style={responsiveStyles.footerText}>
+                  Secure authentication powered by Supabase
+                </Text>
+              </View>
+            )}
 
             {/* Powered By Section */}
-            <View style={[
-              styles.poweredBySection,
-              isWeb && isDesktop && {
-                marginTop: isLargeDesktop ? 32 : 28,
-                paddingTop: isLargeDesktop ? 24 : 20,
-              }
-            ]}>
-              <Text style={[
-                styles.poweredByText,
-                isWeb && isDesktop && {
-                  fontSize: isLargeDesktop ? 14 : 12,
-                },
-                isMobile && {
-                  fontSize: 13, // Increased from 11 to 13
-                }
-              ]}>
+            <View style={responsiveStyles.poweredBySection}>
+              <Text style={responsiveStyles.poweredByText}>
                 Powered by
               </Text>
-              <View style={[
-                styles.logosContainer,
-                isMobile && {
-                  gap: 16, // Increased gap on mobile for better spacing
-                }
-              ]}>
+              <View style={responsiveStyles.logosContainer}>
                 <View style={styles.logoItem}>
                   <EntriLogo 
                     width={getLogoSize()}
