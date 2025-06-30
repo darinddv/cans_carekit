@@ -12,9 +12,15 @@ import {
   Dimensions,
   ScrollView,
 } from 'react-native';
-import { Heart, Eye, EyeOff, Lock, Mail, User, Briefcase } from 'lucide-react-native';
+import { Eye, EyeOff, Lock, Mail, User, Briefcase } from 'lucide-react-native';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
+
+// Import SVG assets as components
+import BoltLogo from '@/assets/images/bolt.svg';
+import EntriLogo from '@/assets/images/entri.svg';
+import NetlifyLogo from '@/assets/images/netlify.svg';
+import SupabaseLogo from '@/assets/images/supabase.svg';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -186,10 +192,9 @@ export default function LoginScreen() {
                   borderRadius: isLargeDesktop ? 50 : 45,
                 }
               ]}>
-                <Heart 
-                  size={isWeb && isDesktop ? (isLargeDesktop ? 56 : 52) : 48} 
-                  color="#007AFF" 
-                  strokeWidth={2} 
+                <BoltLogo 
+                  width={isWeb && isDesktop ? (isLargeDesktop ? 56 : 52) : 48}
+                  height={isWeb && isDesktop ? (isLargeDesktop ? 56 : 52) : 48}
                 />
               </View>
               <Text style={responsiveStyles.title}>Care Card</Text>
@@ -397,6 +402,44 @@ export default function LoginScreen() {
                 Secure authentication powered by Supabase
               </Text>
             </View>
+
+            {/* Powered By Section */}
+            <View style={[
+              styles.poweredBySection,
+              isWeb && isDesktop && {
+                marginTop: isLargeDesktop ? 32 : 28,
+                paddingTop: isLargeDesktop ? 24 : 20,
+              }
+            ]}>
+              <Text style={[
+                styles.poweredByText,
+                isWeb && isDesktop && {
+                  fontSize: isLargeDesktop ? 14 : 12,
+                }
+              ]}>
+                Powered by
+              </Text>
+              <View style={styles.logosContainer}>
+                <View style={styles.logoItem}>
+                  <EntriLogo 
+                    width={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                    height={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                  />
+                </View>
+                <View style={styles.logoItem}>
+                  <NetlifyLogo 
+                    width={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                    height={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                  />
+                </View>
+                <View style={styles.logoItem}>
+                  <SupabaseLogo 
+                    width={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                    height={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                  />
+                </View>
+              </View>
+            </View>
           </View>
         </ContentWrapper>
       </KeyboardAvoidingView>
@@ -603,5 +646,27 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  poweredBySection: {
+    alignItems: 'center',
+    marginTop: 24,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  poweredByText: {
+    fontSize: 12,
+    color: '#8E8E93',
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  logosContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  logoItem: {
+    opacity: 0.7,
   },
 });
