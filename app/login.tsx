@@ -16,11 +16,11 @@ import { Eye, EyeOff, Lock, Mail, User, Briefcase } from 'lucide-react-native';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
 
-// Import SVG assets as components
-import BoltLogo from '@/assets/images/bolt.svg';
-import EntriLogo from '@/assets/images/entri.svg';
-import NetlifyLogo from '@/assets/images/netlify.svg';
-import SupabaseLogo from '@/assets/images/supabase.svg';
+// Import SVG assets as components using relative paths
+import BoltLogo from '../assets/images/bolt.svg';
+import EntriLogo from '../assets/images/entri.svg';
+import NetlifyLogo from '../assets/images/netlify.svg';
+import SupabaseLogo from '../assets/images/supabase.svg';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
