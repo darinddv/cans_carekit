@@ -15,17 +15,6 @@ import {
 import { Eye, EyeOff, Lock, Mail, User, Briefcase } from 'lucide-react-native';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
-import { useFonts } from 'expo-font';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
-import {
-  DancingScript_400Regular,
-  DancingScript_700Bold,
-} from '@expo-google-fonts/dancing-script';
 
 // Import SVG assets as components using relative paths
 import BoltLogo from '../assets/images/bolt.svg';
@@ -40,16 +29,6 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
-
-  // Load fonts
-  const [fontsLoaded] = useFonts({
-    'Inter-Regular': Inter_400Regular,
-    'Inter-Medium': Inter_500Medium,
-    'Inter-SemiBold': Inter_600SemiBold,
-    'Inter-Bold': Inter_700Bold,
-    'DancingScript-Regular': DancingScript_400Regular,
-    'DancingScript-Bold': DancingScript_700Bold,
-  });
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -219,17 +198,6 @@ export default function LoginScreen() {
   const responsiveStyles = getResponsiveStyles();
 
   const ContentWrapper = isWeb && isDesktop ? ScrollView : View;
-
-  // Don't render until fonts are loaded
-  if (!fontsLoaded) {
-    return (
-      <SafeAreaView style={responsiveStyles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={responsiveStyles.container}>
@@ -543,11 +511,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
     alignItems: 'center',

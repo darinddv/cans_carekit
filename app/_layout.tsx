@@ -5,6 +5,17 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { router } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { UserProvider, useUser } from '@/contexts/UserContext';
+import { useFonts } from 'expo-font';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import {
+  DancingScript_400Regular,
+  DancingScript_700Bold,
+} from '@expo-google-fonts/dancing-script';
 
 function AppContent() {
   const { userProfile, isLoading, isAuthenticated, error } = useUser();
@@ -67,6 +78,26 @@ function AppContent() {
 export default function RootLayout() {
   useFrameworkReady();
 
+  // Load fonts at the root level
+  const [fontsLoaded, fontError] = useFonts({
+    'Inter-Regular': Inter_400Regular,
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+    'Inter-Bold': Inter_700Bold,
+    'DancingScript-Regular': DancingScript_400Regular,
+    'DancingScript-Bold': DancingScript_700Bold,
+  });
+
+  // Don't render the app until fonts are loaded
+  if (!fontsLoaded && !fontError) {
+    return (
+      <View style={styles.fontLoadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.fontLoadingText}>Loading fonts...</Text>
+      </View>
+    );
+  }
+
   return (
     <UserProvider>
       <AppContent />
@@ -83,6 +114,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
   },
   loadingText: {
+    fontSize: 16,
+    color: '#8E8E93',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  fontLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+  },
+  fontLoadingText: {
     fontSize: 16,
     color: '#8E8E93',
     marginTop: 16,
