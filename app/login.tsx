@@ -96,7 +96,7 @@ export default function LoginScreen() {
   // Calculate responsive logo sizes - increased by 4-6px across all sizes
   const getLogoSize = () => {
     if (isMobile) {
-      return windowDimensions.width < 400 ? 26 : 30; // was 20:24, now 26:30
+      return windowDimensions.width < 400 ? 36 : 40; // was 20:24, now 26:30
     } else if (isTablet) {
       return 34; // was 28, now 34
     } else if (isDesktop) {
