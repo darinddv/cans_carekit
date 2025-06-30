@@ -93,16 +93,17 @@ export default function LoginScreen() {
   const isLargeDesktop = windowDimensions.width >= 1440;
   const isMobile = windowDimensions.width < 768;
 
-  // Calculate responsive logo sizes - increased by 4-6px across all sizes
+  // Calculate responsive logo sizes - significantly increased for mobile
   const getLogoSize = () => {
     if (isMobile) {
-      return windowDimensions.width < 400 ? 36 : 40; // was 20:24, now 26:30
+      // Much larger on mobile - increased from 36:40 to 48:56
+      return windowDimensions.width < 400 ? 48 : 56;
     } else if (isTablet) {
-      return 34; // was 28, now 34
+      return 40; // Increased from 34 to 40
     } else if (isDesktop) {
-      return isLargeDesktop ? 38 : 34; // was 32:28, now 38:34
+      return isLargeDesktop ? 44 : 40; // Increased from 38:34 to 44:40
     }
-    return 30; // was 24, now 30
+    return 40; // Increased from 30 to 40
   };
 
   const getMainIconSize = () => {
@@ -441,7 +442,7 @@ export default function LoginScreen() {
                   fontSize: isLargeDesktop ? 14 : 12,
                 },
                 isMobile && {
-                  fontSize: 11,
+                  fontSize: 13, // Increased from 11 to 13
                 }
               ]}>
                 Powered by
@@ -449,7 +450,7 @@ export default function LoginScreen() {
               <View style={[
                 styles.logosContainer,
                 isMobile && {
-                  gap: 12, // Reduce gap on mobile
+                  gap: 16, // Increased gap on mobile for better spacing
                 }
               ]}>
                 <View style={styles.logoItem}>
