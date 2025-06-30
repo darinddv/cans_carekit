@@ -17,10 +17,10 @@ import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
 
 // Import SVG assets as components using relative paths
-import BoltLogo from '@/assets/images/bolt.svg';
-import EntriLogo from '@/assets/images/entri.svg';
-import NetlifyLogo from '@/assets/images/netlify.svg';
-import SupabaseLogo from '@/assets/images/supabase.svg';
+import BoltLogo from '../assets/images/bolt.svg';
+import EntriLogo from '../assets/images/entri.svg';
+import NetlifyLogo from '../assets/images/netlify.svg';
+import SupabaseLogo from '../assets/images/supabase.svg';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -91,6 +91,30 @@ export default function LoginScreen() {
   const isTablet = windowDimensions.width >= 768;
   const isDesktop = windowDimensions.width >= 1024;
   const isLargeDesktop = windowDimensions.width >= 1440;
+  const isMobile = windowDimensions.width < 768;
+
+  // Calculate responsive logo sizes
+  const getLogoSize = () => {
+    if (isMobile) {
+      return windowDimensions.width < 400 ? 20 : 24;
+    } else if (isTablet) {
+      return 28;
+    } else if (isDesktop) {
+      return isLargeDesktop ? 32 : 28;
+    }
+    return 24;
+  };
+
+  const getMainIconSize = () => {
+    if (isMobile) {
+      return windowDimensions.width < 400 ? 40 : 48;
+    } else if (isTablet) {
+      return 60;
+    } else if (isDesktop) {
+      return isLargeDesktop ? 56 : 52;
+    }
+    return 48;
+  };
 
   const getResponsiveStyles = () => {
     const baseStyles = styles;
@@ -193,8 +217,8 @@ export default function LoginScreen() {
                 }
               ]}>
                 <BoltLogo 
-                  width={isWeb && isDesktop ? (isLargeDesktop ? 56 : 52) : 48}
-                  height={isWeb && isDesktop ? (isLargeDesktop ? 56 : 52) : 48}
+                  width={getMainIconSize()}
+                  height={getMainIconSize()}
                 />
               </View>
               <Text style={responsiveStyles.title}>Care Card</Text>
@@ -415,27 +439,35 @@ export default function LoginScreen() {
                 styles.poweredByText,
                 isWeb && isDesktop && {
                   fontSize: isLargeDesktop ? 14 : 12,
+                },
+                isMobile && {
+                  fontSize: 11,
                 }
               ]}>
                 Powered by
               </Text>
-              <View style={styles.logosContainer}>
+              <View style={[
+                styles.logosContainer,
+                isMobile && {
+                  gap: 12, // Reduce gap on mobile
+                }
+              ]}>
                 <View style={styles.logoItem}>
                   <EntriLogo 
-                    width={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
-                    height={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                    width={getLogoSize()}
+                    height={getLogoSize()}
                   />
                 </View>
                 <View style={styles.logoItem}>
                   <NetlifyLogo 
-                    width={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
-                    height={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                    width={getLogoSize()}
+                    height={getLogoSize()}
                   />
                 </View>
                 <View style={styles.logoItem}>
                   <SupabaseLogo 
-                    width={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
-                    height={isWeb && isDesktop ? (isLargeDesktop ? 32 : 28) : 24}
+                    width={getLogoSize()}
+                    height={getLogoSize()}
                   />
                 </View>
               </View>
