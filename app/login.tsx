@@ -15,6 +15,17 @@ import {
 import { Eye, EyeOff, Lock, Mail, User, Briefcase } from 'lucide-react-native';
 import { SupabaseService } from '@/lib/supabaseService';
 import { router } from 'expo-router';
+import { useFonts } from 'expo-font';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import {
+  DancingScript_400Regular,
+  DancingScript_700Bold,
+} from '@expo-google-fonts/dancing-script';
 
 // Import SVG assets as components using relative paths
 import BoltLogo from '../assets/images/bolt.svg';
@@ -29,6 +40,16 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [windowDimensions, setWindowDimensions] = useState(Dimensions.get('window'));
+
+  // Load fonts
+  const [fontsLoaded] = useFonts({
+    'Inter-Regular': Inter_400Regular,
+    'Inter-Medium': Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+    'Inter-Bold': Inter_700Bold,
+    'DancingScript-Regular': DancingScript_400Regular,
+    'DancingScript-Bold': DancingScript_700Bold,
+  });
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -141,13 +162,17 @@ export default function LoginScreen() {
           shadowRadius: 24,
           elevation: 8,
         },
-        title: {
-          ...baseStyles.title,
-          fontSize: isLargeDesktop ? 40 : 36,
+        brandTitle: {
+          ...baseStyles.brandTitle,
+          fontSize: isLargeDesktop ? 48 : 44,
         },
-        subtitle: {
-          ...baseStyles.subtitle,
-          fontSize: isLargeDesktop ? 18 : 16,
+        brandSubtitle: {
+          ...baseStyles.brandSubtitle,
+          fontSize: isLargeDesktop ? 20 : 18,
+        },
+        tagline: {
+          ...baseStyles.tagline,
+          fontSize: isLargeDesktop ? 16 : 15,
         },
         input: {
           ...baseStyles.input,
@@ -177,12 +202,12 @@ export default function LoginScreen() {
           alignSelf: 'center',
           paddingHorizontal: 32,
         },
-        title: {
-          ...baseStyles.title,
-          fontSize: 36,
+        brandTitle: {
+          ...baseStyles.brandTitle,
+          fontSize: 44,
         },
-        subtitle: {
-          ...baseStyles.subtitle,
+        brandSubtitle: {
+          ...baseStyles.brandSubtitle,
           fontSize: 18,
         },
       };
@@ -194,6 +219,17 @@ export default function LoginScreen() {
   const responsiveStyles = getResponsiveStyles();
 
   const ContentWrapper = isWeb && isDesktop ? ScrollView : View;
+
+  // Don't render until fonts are loaded
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaView style={responsiveStyles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={responsiveStyles.container}>
@@ -222,8 +258,23 @@ export default function LoginScreen() {
                   height={getMainIconSize()}
                 />
               </View>
-              <Text style={responsiveStyles.title}>Care Card</Text>
-              <Text style={responsiveStyles.subtitle}>
+              
+              {/* Brand Name with Custom Styling */}
+              <View style={styles.brandContainer}>
+                <View style={styles.brandTitleContainer}>
+                  <Text style={[responsiveStyles.brandTitle, styles.wellText]}>
+                    well
+                  </Text>
+                  <Text style={[responsiveStyles.brandTitle, styles.comText]}>
+                    COM
+                  </Text>
+                </View>
+                <Text style={responsiveStyles.brandSubtitle}>
+                  Collaborative Outcomes Management
+                </Text>
+              </View>
+              
+              <Text style={responsiveStyles.tagline}>
                 Sign in to access your personalized care plan
               </Text>
             </View>
@@ -493,6 +544,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     justifyContent: 'center',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     alignItems: 'center',
     marginBottom: 40,
@@ -511,19 +567,47 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  title: {
-    fontSize: 32,
+  brandContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  brandTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  brandTitle: {
     fontWeight: '700',
     color: '#1C1C1E',
-    marginBottom: 8,
     textAlign: 'center',
   },
-  subtitle: {
+  wellText: {
+    fontFamily: 'DancingScript-Bold',
+    fontSize: 40,
+    color: '#007AFF',
+    marginRight: 4,
+  },
+  comText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 40,
+    color: '#1C1C1E',
+    letterSpacing: 2,
+  },
+  brandSubtitle: {
+    fontSize: 18,
+    color: '#007AFF',
+    textAlign: 'center',
+    fontFamily: 'Inter-Medium',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  tagline: {
     fontSize: 16,
     color: '#8E8E93',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 20,
+    fontFamily: 'Inter-Regular',
   },
   form: {
     marginBottom: 24,
@@ -541,6 +625,7 @@ const styles = StyleSheet.create({
     color: '#FF3B30',
     fontWeight: '500',
     textAlign: 'center',
+    fontFamily: 'Inter-Medium',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -566,7 +651,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1C1C1E',
     paddingVertical: 16,
-    fontWeight: '500',
+    fontFamily: 'Inter-Medium',
   },
   passwordInput: {
     paddingRight: 12,
@@ -594,6 +679,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
   },
   divider: {
     flexDirection: 'row',
@@ -609,7 +695,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8E8E93',
     paddingHorizontal: 16,
-    fontWeight: '500',
+    fontFamily: 'Inter-Medium',
   },
   roleButtons: {
     flexDirection: 'row',
@@ -663,6 +749,7 @@ const styles = StyleSheet.create({
   roleButtonText: {
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: 'Inter-SemiBold',
   },
   patientButtonText: {
     color: '#FF69B4',
@@ -679,6 +766,7 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textAlign: 'center',
     fontStyle: 'italic',
+    fontFamily: 'Inter-Regular',
   },
   poweredBySection: {
     alignItems: 'center',
@@ -690,7 +778,7 @@ const styles = StyleSheet.create({
   poweredByText: {
     fontSize: 12,
     color: '#8E8E93',
-    fontWeight: '500',
+    fontFamily: 'Inter-Medium',
     marginBottom: 12,
   },
   logosContainer: {
